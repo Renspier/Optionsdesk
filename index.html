@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>OptionsDESK</title>
+<!-- No external fonts — uses system fonts for offline compatibility -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080a0d;--surface:#0f1117;--border:#1a1d26;
+  --accent:#00e5b4;--accentD:rgba(0,229,180,0.09);
+  --red:#ff4560;--redD:rgba(255,69,96,0.09);
+  --yellow:#fbbf24;--text:#e2e8f0;--muted:#5a6375;--dim:#2a2f3d;
+  --degiro:#ff6b35;--degiroD:rgba(255,107,53,0.1);
+  --mono:ui-monospace,'Menlo','Consolas','Courier New',monospace;--display:ui-rounded,'SF Pro Rounded','Trebuchet MS',system-ui,sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;min-height:100vh;-webkit-text-size-adjust:100%}
+input,select,button{font-family:var(--mono);font-size:13px;-webkit-appearance:none;appearance:none}
+input,select{background:#0a0c10;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;width:100%;outline:none}
+input:focus,select:focus{border-color:var(--accent)}
+button{cursor:pointer;border:none;border-radius:8px;transition:background .15s,color .15s}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card-sm{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px}
+.btn-accent{background:var(--accent);color:#000;font-weight:700;padding:10px 20px;letter-spacing:.04em}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);padding:8px 14px}
+.btn-danger{background:var(--redD);color:var(--red);border:1px solid rgba(255,69,96,0.25);padding:8px 14px}
+.btn-degiro{background:var(--degiro);color:#fff;font-weight:700;padding:9px 22px}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600}
+.badge-accent{background:var(--accentD);color:var(--accent)}
+.badge-degiro{background:var(--degiroD);color:var(--degiro)}
+.badge-muted{background:rgba(42,47,61,.7);color:var(--muted)}
+.badge-red{background:var(--redD);color:var(--red)}
+.pos-green{color:var(--accent);font-weight:700}
+.pos-red{color:var(--red);font-weight:700}
+.row-click{cursor:pointer;transition:background .12s}
+.row-click:hover,.row-click:active{background:#13161f}
+header{border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;height:52px;position:sticky;top:0;background:var(--bg);z-index:100;gap:8px}
+#main{max-width:1100px;margin:0 auto;padding:24px 16px}
+.metric-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px}
+@media(min-width:600px){.metric-grid{grid-template-columns:repeat(4,1fr)}}
+.metric-val{font-family:var(--display);font-size:22px;font-weight:800;margin:6px 0 4px}
+.metric-lbl{font-size:9px;letter-spacing:.1em;color:var(--muted)}
+.metric-sub{font-size:11px;color:var(--muted)}
+.section-title{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:16px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;font-size:9px;letter-spacing:.08em;color:var(--muted);font-weight:400;padding-bottom:10px;padding-right:12px;white-space:nowrap}
+.tbl td{padding:10px 12px 10px 0;border-top:1px solid var(--border);vertical-align:middle}
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.fpill{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:11px;font-family:var(--mono)}
+.fpill.on{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.pos-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px}
+.pos-row-grid{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav{display:flex;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+nav::-webkit-scrollbar{display:none}
+.navbtn{background:transparent;color:var(--muted);padding:6px 12px;font-size:11px;letter-spacing:.05em;white-space:nowrap;border-radius:6px}
+.navbtn.on{background:var(--accentD);color:var(--accent)}
+.navbtn.on-import{background:var(--degiroD);color:var(--degiro)}
+.leg-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:9px 12px;background:#0a0c10;border-radius:6px;margin-bottom:5px}
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;background:#0a0c10;position:relative;overflow:hidden}
+.step-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:20px}
+@media(min-width:500px){.step-grid{grid-template-columns:repeat(5,1fr)}}
+.fade-in{animation:fi .2s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.blink{animation:pulse 2.4s infinite}
+.editable-prem{border-bottom:1px dashed var(--muted);cursor:pointer;padding-bottom:1px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-field{margin-bottom:12px}
+.form-label{font-size:9px;letter-spacing:.1em;color:var(--muted);margin-bottom:5px;display:block}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:600px){.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+    <div class="blink" style="width:7px;height:7px;border-radius:50%;background:var(--accent)"></div>
+    <span style="font-family:var(--display);font-weight:800;font-size:14px;letter-spacing:-.02em">OPTIONS<span style="color:var(--accent)">DESK</span></span>
+    <span class="badge badge-accent" style="font-size:9px;letter-spacing:.07em">EUREX</span>
+    <span id="hdr-degiro" class="badge badge-degiro" style="font-size:9px;display:none">DEGIRO ✓</span>
+  </div>
+  <nav id="nav" style="margin-left:8px;flex:1"></nav>
+  <span id="hdr-date" style="font-size:10px;color:var(--muted);flex-shrink:0;margin-left:8px"></span>
+</header>
+
+<div id="main"></div>
+
+<script>
+// --- Utilities ----------------------------------------------------------------
+var fmt = function(n,d){
+  d = d===undefined?2:d;
+  if(n==null) return '--';
+  return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+};
+var fmtE = function(n){
+  if(n==null) return '--';
+  return (n>=0?'+':'-')+'€'+fmt(Math.abs(n));
+};
+var fmtPct = function(n){
+  if(n==null) return '--';
+  return (n>=0?'+':'')+fmt(n)+'%';
+};
+var pcClass = function(n){ return n>=0?'pos-green':'pos-red'; };
+var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+
+// P&L formula: sign * (currentPremium - entryPremium) * netContracts * 5
+// - sign: +1 for BUY, -1 for SELL
+// - netContracts: net open contracts from transaction history (or leg.qty from portfolio)
+// - 5: ODAX multiplier (EUR 5 per index point per contract)
+var MULTIPLIER = 5;
+
+function calcPnL(pos){
+  var totalPnL=0;
+  var entryNet=0;
+  for(var i=0;i<pos.legs.length;i++){
+    var l=pos.legs[i];
+    var curr=l.currentPremium!=null?l.currentPremium:l.entryPremium;
+    var s=l.action==='BUY'?1:-1;
+    // netContracts: from transaction history if available, else leg qty, else pos.contracts
+    var netContracts=l.netContracts!=null?l.netContracts:(l.qty!=null?l.qty:pos.contracts);
+    var legPnL=s*(curr-l.entryPremium)*netContracts*MULTIPLIER;
+    totalPnL+=legPnL;
+    entryNet+=(l.action==='SELL'?1:-1)*l.entryPremium*netContracts*MULTIPLIER;
+  }
+  var maxRisk=Math.abs(entryNet)||1;
+  return{entryNet:entryNet,totalPnL:totalPnL,pct:totalPnL/maxRisk*100};
+}
+
+// --- State --------------------------------------------------------------------
+var state = {
+  view: 'dashboard',
+  positions: [],
+  transactions: [],
+  filter: 'All',
+  selectedId: null,
+  editPrem: null,
+  editEntry: null,
+  eurexResults: [],
+  eurexSelected: null,
+  eurexContracts: [],
+  eurexApiOk: null,
+  eurexLoading: false,
+  eurexError: null,
+  importStep: 'idle',
+  importTxns: [],
+  importPositions: [],
+  importSelected: {},
+  importError: null,
+  txnHistFile: null,    // name of uploaded transaction history file
+  txnHistTxns: [],      // parsed transaction history rows
+  txnHistError: null,
+  newPos: null,
+  newLegs: [],
+  addLegOpen: false
+};
+
+var SPREAD_TYPES=['Bull Call Spread','Bear Put Spread','Bull Put Spread','Bear Call Spread','Iron Condor','Iron Butterfly','Straddle','Strangle','Diagonal','Calendar','Long Call','Short Call','Long Put','Short Put','Option'];
+var STATUSES=['Open','Closed','Expired'];
+var EUREX_ENDPOINT='https://api.developer.deutsche-boerse.com/eurex-prod-graphql/';
+var EUREX_KEY='68cdafd2-c5c1-49be-8558-37244ab4f513';
+
+// --- DeGiro Parser ------------------------------------------------------------
+var MONTH_MAP={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12',mrt:'03',mei:'05',okt:'10'};
+
+function parseOptionName(name){
+  var m=name.match(/^([A-Za-z]+)\s+([cpCP])\s*(\d+(?:[.,]\d+)?)\s+(\d{1,2})([a-zA-Z]{3})(\d{2,4})\s*$/);
+  if(!m) return null;
+  var ticker=m[1].toUpperCase();
+  var optType=m[2].toLowerCase()==='c'?'CALL':'PUT';
+  var strike=parseFloat(m[3].replace(',','.'));
+  var day=m[4];
+  var mon=m[5].toLowerCase().slice(0,3);
+  var yr=m[6];
+  var monthNum=MONTH_MAP[mon];
+  if(!monthNum) return null;
+  var year=yr.length===2?'20'+yr:yr;
+  var expiry=year+'-'+monthNum+'-'+(day.length===1?'0'+day:day);
+  return{ticker:ticker,optType:optType,strike:strike,expiry:expiry};
+}
+
+function parseCsvLine(line,sep){
+  var r=[],cur='',inQ=false;
+  for(var i=0;i<line.length;i++){
+    var ch=line[i];
+    if(ch==='"'){inQ=!inQ;continue;}
+    if(ch===sep&&!inQ){r.push(cur.trim());cur='';continue;}
+    cur+=ch;
+  }
+  r.push(cur.trim());
+  return r;
+}
+
+function parseNum(s){
+  if(!s) return null;
+  var c=s.replace(/\./g,'').replace(',','.');
+  var n=parseFloat(c);
+  return isNaN(n)?null:n;
+}
+
+function parseDeGiroCSV(text){
+  var lines=text.trim().split('\n').map(function(l){return l.replace(/\r/g,'');});
+  if(lines.length<2) throw new Error('CSV appears empty');
+  var sep=lines[0].indexOf(';')>=0?';':',';
+  var rawH=parseCsvLine(lines[0],sep);
+  var headers=rawH.map(function(h){return h.toLowerCase().trim();});
+
+  function col(){
+    for(var k=0;k<arguments.length;k++){
+      var key=arguments[k];
+      for(var i=0;i<headers.length;i++){
+        if(headers[i].indexOf(key)>=0) return i;
+      }
+    }
+    return -1;
+  }
+
+  var iProduct=col('product');
+  var iQty=col('aantal','quantity','hoeveelheid');
+  var iSlot=col('slotkoers','closeprice','close','current','last');
+  var iAank=col('aankoopkoers','openingskoers','gemiddelde','avg','entry','purchase');
+  var iDatum=col('datum','date');
+  var iCurr=col('valuta','currency');
+
+  var result=[];
+  for(var i=1;i<lines.length;i++){
+    var line=lines[i];
+    if(!line.trim()) continue;
+    var vals=parseCsvLine(line,sep);
+    function g(idx){return idx>=0?(vals[idx]||'').trim():'';}
+    var product=g(iProduct);
+    if(!product) continue;
+    var qty=parseNum(g(iQty))||0;
+    var slotkoers=parseNum(g(iSlot));
+    var aankoopkoers=parseNum(g(iAank));
+    var date=g(iDatum);
+    var currency=g(iCurr)||'EUR';
+    var optInfo=parseOptionName(product);
+    var isOption=optInfo!==null;
+    result.push({
+      id:'dg_'+i, date:date, product:product, currency:currency,
+      qty:qty, absQty:Math.abs(qty),
+      action:qty<0?'SELL':'BUY',
+      entryPrice:aankoopkoers, currentPrice:slotkoers,
+      isOption:isOption,
+      ticker:optInfo?optInfo.ticker:product.split(' ')[0].toUpperCase(),
+      optType:optInfo?optInfo.optType:'',
+      strike:optInfo?optInfo.strike:null,
+      expiry:optInfo?optInfo.expiry:''
+    });
+  }
+  return result;
+}
+
+function groupIntoPositions(txns){
+  var optTxns=txns.filter(function(t){return t.isOption;});
+  var groups={};
+  for(var i=0;i<optTxns.length;i++){
+    var t=optTxns[i];
+    var key=t.ticker+'_'+t.expiry;
+    if(!groups[key]) groups[key]=[];
+    groups[key].push(t);
+  }
+  var positions=[];
+  var keys=Object.keys(groups);
+  for(var k=0;k<keys.length;k++){
+    var list=groups[keys[k]];
+    var hasCalls=list.some(function(t){return t.optType==='CALL';});
+    var hasPuts=list.some(function(t){return t.optType==='PUT';});
+    var strikes={};list.forEach(function(t){if(t.strike!=null)strikes[t.strike]=1;});
+    var hasMulti=Object.keys(strikes).length>1;
+    var hasBoth=list.some(function(t){return t.action==='BUY';})&&list.some(function(t){return t.action==='SELL';});
+    var type='Option';
+    if(hasCalls&&hasPuts&&hasBoth) type='Iron Condor';
+    else if(hasCalls&&hasPuts) type='Straddle';
+    else if(hasCalls&&hasMulti&&hasBoth) type='Bull Call Spread';
+    else if(hasPuts&&hasMulti&&hasBoth) type='Bear Put Spread';
+    else if(hasCalls&&list[0].action==='BUY') type='Long Call';
+    else if(hasCalls) type='Short Call';
+    else if(hasPuts&&list[0].action==='BUY') type='Long Put';
+    else if(hasPuts) type='Short Put';
+    positions.push({
+      id:Date.now()+Math.random(),
+      ticker:list[0].ticker, type:type,
+      contracts:Math.max.apply(null,list.map(function(t){return t.absQty||1;})),
+      status:'Open', openDate:list[0].date||new Date().toISOString().split('T')[0],
+      notes:'Imported from DeGiro', source:'degiro',
+      legs:list.map(function(t){return{
+        action:t.action, optType:t.optType||'CALL',
+        strike:t.strike||0, expiry:t.expiry,
+        entryPremium:t.entryPrice!=null?t.entryPrice:(t.currentPrice||0),
+        currentPremium:t.currentPrice!=null?t.currentPrice:(t.entryPrice||0),
+        qty:t.absQty||null,       // per-leg quantity from portfolio CSV
+        netContracts:t.absQty||null  // will be overwritten by enrichLegsWithTransactions
+      };})
+    });
+  }
+  return{positions:positions,all:txns};
+}
+
+
+// --- DeGiro Transaction History Parser ---------------------------------------
+// Transaction history CSV columns (Dutch):
+// Datum;Tijd;Product;ISIN;Beurs;Aantal;Koers;Lokale waarde;Waarde;Wisselkoers;Transactiekosten;Totaal;Order ID
+function parseDeGiroTransactions(text){
+  var lines=text.trim().split('\n').map(function(l){return l.replace(/\r/g,'');});
+  if(lines.length<2) throw new Error('CSV appears empty');
+  var sep=lines[0].indexOf(';')>=0?';':',';
+  var rawH=parseCsvLine(lines[0],sep);
+  var headers=rawH.map(function(h){return h.toLowerCase().trim();});
+
+  function col(){
+    for(var k=0;k<arguments.length;k++){
+      var key=arguments[k];
+      for(var i=0;i<headers.length;i++){
+        if(headers[i].indexOf(key)>=0) return i;
+      }
+    }
+    return -1;
+  }
+
+  var iDatum   = col('datum','date');
+  var iTijd    = col('tijd','time');
+  var iProduct = col('product');
+  var iAantal  = col('aantal','quantity','qty');
+  var iKoers   = col('koers','price','koers');
+  var iWaarde  = col('lokale waarde','lokalewaarde','local value','waarde','value','totaal','total');
+  var iCosts   = col('transactiekosten','costs','kosten','commissie');
+  var iTotaal  = col('totaal','total');
+
+  // If we have both waarde and totaal, prefer totaal (includes costs)
+  // But for price per unit we want koers
+  var result=[];
+  for(var i=1;i<lines.length;i++){
+    var line=lines[i];
+    if(!line.trim()) continue;
+    var vals=parseCsvLine(line,sep);
+    function g(idx){return idx>=0?(vals[idx]||'').trim():'';}
+
+    var product=g(iProduct);
+    if(!product) continue;
+
+    var dateStr=g(iDatum);
+    var qty=parseNum(g(iAantal))||0;
+    var koers=parseNum(g(iKoers));   // price per unit (the actual trade price)
+    var waarde=parseNum(g(iWaarde));
+    var costs=parseNum(g(iCosts));
+    var currency='EUR';
+
+    // Try to detect currency from value columns -- values in col header or adjacent col
+    // DeGiro often has currency as a separate column next to the value
+    // Look for a column that is just a 3-letter currency code
+    for(var j=0;j<vals.length;j++){
+      if(/^[A-Z]{3}$/.test((vals[j]||'').trim())){
+        currency=(vals[j]||'EUR').trim();
+        break;
+      }
+    }
+
+    var optInfo=parseOptionName(product);
+    var isOption=optInfo!==null;
+
+    result.push({
+      id:'txn_'+i,
+      date:dateStr,
+      product:product,
+      qty:qty,
+      absQty:Math.abs(qty),
+      action:qty<0?'SELL':'BUY',
+      koers:koers,        // price per unit - this is the actual entry price
+      waarde:waarde,
+      costs:costs||0,
+      currency:currency,
+      isOption:isOption,
+      ticker:optInfo?optInfo.ticker:product.split(' ')[0].toUpperCase(),
+      optType:optInfo?optInfo.optType:'',
+      strike:optInfo?optInfo.strike:null,
+      expiry:optInfo?optInfo.expiry:'',
+      productKey:product.toLowerCase().trim()  // for matching
+    });
+  }
+  return result;
+}
+
+// Enrich legs with real entry prices and net open contracts from transaction history
+function enrichLegsWithTransactions(positions, txns){
+  var optTxns=txns.filter(function(t){return t.isOption&&t.koers!=null;});
+
+  positions.forEach(function(pos){
+    pos.legs.forEach(function(leg){
+      // Match transactions by ticker + optType + strike + expiry
+      var matches=optTxns.filter(function(t){
+        return t.ticker===pos.ticker &&
+               t.optType===leg.optType &&
+               t.strike===leg.strike &&
+               t.expiry===leg.expiry;
+      });
+
+      if(matches.length>0){
+        var buys=matches.filter(function(t){return t.action==='BUY';});
+        var sells=matches.filter(function(t){return t.action==='SELL';});
+        var totalBuyQty=buys.reduce(function(s,t){return s+t.absQty;},0);
+        var totalSellQty=sells.reduce(function(s,t){return s+t.absQty;},0);
+
+        // Net open contracts: buys minus sells (or sells minus buys for short leg)
+        // Positive = net long, negative = net short
+        var netQty=Math.abs(totalBuyQty-totalSellQty);
+        // If no net (fully closed), use the larger side
+        if(netQty===0) netQty=Math.max(totalBuyQty,totalSellQty);
+        leg.netContracts=netQty;
+
+        // VWAP entry price from opening trades
+        var openingTrades=leg.action==='BUY'?buys:sells;
+        if(openingTrades.length>0){
+          var totalQty=openingTrades.reduce(function(s,t){return s+t.absQty;},0);
+          var totalVal=openingTrades.reduce(function(s,t){return s+t.koers*t.absQty;},0);
+          var vwap=totalQty>0?totalVal/totalQty:null;
+          if(vwap!=null){
+            leg.entryPremium=Math.round(vwap*100)/100;
+            leg.txnMatched=true;
+          }
+        }
+
+        // Store all transactions on leg for display
+        leg.transactions=matches.map(function(t){
+          return{date:t.date,action:t.action,qty:t.absQty,price:t.koers,costs:t.costs};
+        });
+      }
+    });
+
+    // Update pos.contracts to reflect actual net open contracts
+    var matchedLegs=pos.legs.filter(function(l){return l.netContracts!=null;});
+    if(matchedLegs.length>0){
+      pos.contracts=Math.max.apply(null,matchedLegs.map(function(l){return l.netContracts;}));
+      pos.txnMatched=true;
+    }
+  });
+
+  return positions;
+}
+// --- Eurex API ----------------------------------------------------------------
+function eurexQuery(query,variables,callback){
+  var xhr=new XMLHttpRequest();
+  xhr.open('POST',EUREX_ENDPOINT,true);
+  xhr.setRequestHeader('Content-Type','application/json');
+  xhr.setRequestHeader('X-DBP-APIKEY',EUREX_KEY);
+  xhr.onload=function(){
+    try{
+      var d=JSON.parse(xhr.responseText);
+      if(d.errors) callback(new Error(d.errors[0].message),null);
+      else callback(null,d.data);
+    }catch(e){callback(e,null);}
+  };
+  xhr.onerror=function(){callback(new Error('Network error'),null);};
+  xhr.send(JSON.stringify({query:query,variables:variables||{}}));
+}
+
+// --- Render -------------------------------------------------------------------
+function render(){
+  document.getElementById('hdr-date').textContent=new Date().toLocaleDateString('en-DE',{weekday:'short',day:'numeric',month:'short'});
+  document.getElementById('hdr-degiro').style.display=state.positions.some(function(p){return p.source==='degiro';})&&state.positions.length>0?'inline':'none';
+
+  // Nav
+  var navEl=document.getElementById('nav');
+  var navItems=[['dashboard','OVERVIEW'],['positions','POSITIONS'],['market','EUREX'],['import','⬆ DEGIRO'],['add','+ NEW']];
+  navEl.innerHTML=navItems.map(function(item){
+    var v=item[0],l=item[1];
+    var cls='navbtn';
+    if(state.view===v) cls+=(v==='import'?' on-import':' on');
+    return '<button class="'+cls+'" data-view="'+v+'">'+l+'</button>';
+  }).join('');
+  navEl.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click',function(){
+      var v=this.getAttribute('data-view');
+      if(v==='add') state.newPos={ticker:'',type:'Bull Call Spread',contracts:1,notes:'',status:'Open',openDate:new Date().toISOString().split('T')[0]};
+      state.view=v;
+      render();
+    });
+  });
+
+  var main=document.getElementById('main');
+  var html='<div class="fade-in">';
+  if(state.view==='dashboard') html+=renderDashboard();
+  else if(state.view==='positions') html+=renderPositions();
+  else if(state.view==='detail') html+=renderDetail();
+  else if(state.view==='market') html+=renderMarket();
+  else if(state.view==='import') html+=renderImport();
+  else if(state.view==='add') html+=renderAdd();
+  html+='</div>';
+  main.innerHTML=html;
+  bindEvents();
+}
+
+// --- Dashboard ----------------------------------------------------------------
+function renderDashboard(){
+  var openPos=state.positions.filter(function(p){return p.status==='Open';});
+  var closedPos=state.positions.filter(function(p){return p.status==='Closed';});
+  var totalPnL=openPos.reduce(function(s,p){return s+calcPnL(p).totalPnL;},0);
+  var realPnL=closedPos.reduce(function(s,p){return s+calcPnL(p).totalPnL;},0);
+  var winners=closedPos.filter(function(p){return calcPnL(p).totalPnL>0;}).length;
+  var winRate=closedPos.length?Math.round(winners/closedPos.length*100)+'%':'—';
+
+  var metrics=[
+    {l:'OPEN P&amp;L',v:fmtE(totalPnL),c:totalPnL>=0?'var(--accent)':'var(--red)',s:openPos.length+' open positions'},
+    {l:'OPEN POSITIONS',v:openPos.length,c:'var(--text)',s:state.positions.length+' total trades'},
+    {l:'WIN RATE',v:winRate,c:'var(--yellow)',s:winners+'/'+closedPos.length+' closed'},
+    {l:'REALIZED P&amp;L',v:fmtE(realPnL),c:realPnL>=0?'var(--accent)':'var(--red)',s:'closed positions'},
+  ];
+
+  var metricHtml=metrics.map(function(m){
+    return '<div class="card" style="position:relative;overflow:hidden">'+
+      '<div class="metric-lbl">'+m.l+'</div>'+
+      '<div class="metric-val" style="color:'+m.c+'">'+m.v+'</div>'+
+      '<div class="metric-sub">'+m.s+'</div>'+
+      '<div style="position:absolute;right:-14px;top:-14px;width:64px;height:64px;border-radius:50%;background:'+m.c+';opacity:.06"></div>'+
+      '</div>';
+  }).join('');
+
+  var rows=openPos.map(function(pos){
+    var pnl=calcPnL(pos);
+    return '<tr class="row-click" data-posid="'+pos.id+'" data-goto="detail">'+
+      '<td style="font-family:var(--display);font-weight:700;color:var(--accent)">'+esc(pos.ticker)+'</td>'+
+      '<td style="color:var(--muted);font-size:11px">'+esc(pos.type)+'</td>'+
+      '<td><span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+( pos.source==='degiro'?'DeGiro':'Manual')+'</span></td>'+
+      '<td style="color:var(--muted)">'+pos.legs.length+'</td>'+
+      '<td>'+pos.contracts+'</td>'+
+      '<td class="'+pcClass(pnl.totalPnL)+'">'+fmtE(pnl.totalPnL)+'</td>'+
+      '<td class="'+pcClass(pnl.pct)+'">'+fmtPct(pnl.pct)+'</td>'+
+      '</tr>';
+  }).join('');
+
+  return '<div class="section-title" style="margin-bottom:4px">Portfolio Overview</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:20px">Eurex Derivatives · EUR</div>'+
+    '<div class="metric-grid">'+metricHtml+'</div>'+
+    '<div class="card" style="margin-bottom:14px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+        '<span style="font-family:var(--display);font-weight:700;font-size:14px">Open Positions</span>'+
+        '<button class="btn-ghost" style="font-size:11px" data-goto="positions">ALL →</button>'+
+      '</div>'+
+      '<div style="overflow-x:auto"><table class="tbl">'+
+        '<thead><tr><th>PRODUCT</th><th>STRATEGY</th><th>SOURCE</th><th>LEGS</th><th>CTR</th><th>P&amp;L</th><th>RETURN</th></tr></thead>'+
+        '<tbody>'+rows+'</tbody>'+
+      '</table></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+      '<div class="card-sm row-click" style="display:flex;align-items:center;gap:12px" data-goto="import">'+
+        '<span style="font-size:20px">🏦</span>'+
+        '<div><div style="font-weight:600;font-size:12px;color:var(--degiro)">Import from DeGiro</div>'+
+        '<div style="color:var(--muted);font-size:11px">Upload transaction CSV →</div></div>'+
+      '</div>'+
+      '<div class="card-sm row-click" style="display:flex;align-items:center;gap:12px" data-goto="market">'+
+        '<span style="font-size:20px">📡</span>'+
+        '<div><div style="font-weight:600;font-size:12px">Eurex Reference Data</div>'+
+        '<div style="color:var(--muted);font-size:11px">Live contract specs →</div></div>'+
+      '</div>'+
+    '</div>';
+}
+
+// --- Positions ----------------------------------------------------------------
+function renderPositions(){
+  var filtered=state.filter==='All'?state.positions:state.positions.filter(function(p){return p.status===state.filter;});
+  var pills=['All','Open','Closed','Expired'].map(function(f){
+    return '<button class="fpill'+(state.filter===f?' on':'')+'" data-filter="'+f+'">'+f+'</button>';
+  }).join('');
+
+  var rows=filtered.map(function(pos){
+    var pnl=calcPnL(pos);
+    var sc=pos.status==='Open'?'badge-accent':pos.status==='Expired'?'badge-red':'badge-muted';
+    return '<div class="pos-row row-click" data-posid="'+pos.id+'" data-goto="detail">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+        '<span style="font-family:var(--display);font-weight:700;color:var(--accent);font-size:15px">'+esc(pos.ticker)+'</span>'+
+        '<span class="'+pcClass(pnl.totalPnL)+'" style="font-size:14px">'+fmtE(pnl.totalPnL)+'</span>'+
+      '</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;color:var(--muted)">'+
+        '<span>'+esc(pos.type)+'</span>'+
+        '<span>·</span><span>'+pos.legs.length+' legs</span>'+
+        '<span>·</span><span>'+pos.contracts+'x</span>'+
+        '<span class="badge '+sc+'">'+pos.status+'</span>'+
+        '<span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+(pos.source==='degiro'?'DeGiro':'Manual')+'</span>'+
+        '<span style="margin-left:auto" class="'+pcClass(pnl.pct)+'">'+fmtPct(pnl.pct)+'</span>'+
+      '</div>'+
+      '<div style="font-size:10px;color:var(--muted);margin-top:4px">Opened '+esc(pos.openDate)+'</div>'+
+    '</div>';
+  }).join('');
+
+  if(!filtered.length) rows='<div style="text-align:center;color:var(--muted);padding:40px">No positions found</div>';
+
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
+    '<div class="section-title" style="margin-bottom:0">All Positions</div>'+
+    '</div>'+
+    '<div class="filter-row">'+pills+'</div>'+
+    rows;
+}
+
+// --- Detail -------------------------------------------------------------------
+function renderDetail(){
+  var pos=state.positions.find(function(p){return p.id===state.selectedId;});
+  if(!pos) return renderDashboard();
+  var pnl=calcPnL(pos);
+
+  var metrics=[
+    {l:'TOTAL P&amp;L',v:fmtE(pnl.totalPnL),c:pnl.totalPnL>=0?'var(--accent)':'var(--red)'},
+    {l:'P&amp;L %',v:fmtPct(pnl.pct),c:pnl.pct>=0?'var(--accent)':'var(--red)'},
+    {l:'CONTRACTS',v:pos.contracts,c:'var(--text)'},
+    {l:'OPENED',v:pos.openDate,c:'var(--yellow)'},
+  ];
+
+  var mHtml=metrics.map(function(m){
+    return '<div class="card" style="padding:13px 16px">'+
+      '<div class="metric-lbl">'+m.l+'</div>'+
+      '<div style="font-family:var(--display);font-size:18px;font-weight:800;color:'+m.c+';margin-top:6px">'+m.v+'</div>'+
+      '</div>';
+  }).join('');
+
+  var legsHtml=pos.legs.map(function(leg,i){
+    var s=leg.action==='SELL'?1:-1;
+    var legSign=leg.action==='BUY'?1:-1;
+    var legQty=leg.netContracts!=null?leg.netContracts:(leg.qty!=null?leg.qty:pos.contracts);
+    var lp=legSign*(leg.currentPremium-leg.entryPremium)*legQty*MULTIPLIER;
+    var isEdCurr=state.editPrem&&state.editPrem.posId===pos.id&&state.editPrem.legIdx===i;
+    var isEdEntry=state.editEntry&&state.editEntry.posId===pos.id&&state.editEntry.legIdx===i;
+    var currCell=isEdCurr?
+      '<input id="prem-input" type="number" step="0.01" value="'+leg.currentPremium+'" style="width:80px;padding:4px 8px;font-size:12px"/>':
+      '<span class="editable-prem" data-edit-prem="'+i+'">€'+fmt(leg.currentPremium)+'</span>';
+    var entryCell=isEdEntry?
+      '<input id="entry-input" type="number" step="0.01" value="'+leg.entryPremium+'" style="width:80px;padding:4px 8px;font-size:12px"/>':
+      '<span class="editable-prem" data-edit-entry="'+i+'">€'+fmt(leg.entryPremium)+'</span>';
+    return '<tr>'+
+      '<td><span style="color:'+(leg.action==='BUY'?'var(--accent)':'var(--red)')+';font-weight:700">'+leg.action+'</span></td>'+
+      '<td>'+esc(leg.optType)+'</td>'+
+      '<td style="font-weight:600">'+leg.strike+'</td>'+
+      '<td style="color:var(--muted);font-size:11px">'+esc(leg.expiry||'—')+'</td>'+
+      '<td>'+entryCell+'</td>'+
+      '<td>'+currCell+'</td>'+
+      '<td class="'+pcClass(lp)+'">'+fmtE(lp)+'</td>'+
+      '</tr>';
+  }).join('');
+
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">'+
+    '<button class="btn-ghost" style="font-size:11px" data-goto="positions">← BACK</button>'+
+    '<span style="font-family:var(--display);font-weight:800;font-size:18px">'+esc(pos.ticker)+'</span>'+
+    '<span style="color:var(--muted)">·</span>'+
+    '<span style="font-size:12px;color:var(--muted)">'+esc(pos.type)+'</span>'+
+    (pos.source==='degiro'?'<span class="badge badge-degiro">DeGiro</span>':'')+
+    '<span class="badge '+(pos.status==='Open'?'badge-accent':'badge-muted')+'">'+pos.status+'</span>'+
+  '</div>'+
+  '<div class="metric-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">'+mHtml+'</div>'+
+  '<div class="card" style="margin-bottom:12px">'+
+    '<div style="font-family:var(--display);font-weight:700;font-size:13px;margin-bottom:14px">Legs</div>'+
+    '<div style="overflow-x:auto"><table class="tbl">'+
+      '<thead><tr><th>ACTION</th><th>TYPE</th><th>STRIKE</th><th>EXPIRY</th><th>ENTRY</th><th>CURRENT</th><th>LEG P&amp;L</th></tr></thead>'+
+      '<tbody>'+legsHtml+'</tbody>'+
+    '</table></div>'+
+    '<div style="color:var(--muted);font-size:10px;margin-top:9px">💡 Tap any premium (entry or current) to edit</div>'+
+
+  // Transaction history per leg
+  (pos.legs.some(function(l){return l.transactions&&l.transactions.length;}) ?
+    '<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">'+
+      '<div style="font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">TRANSACTION HISTORY (from DeGiro import)</div>'+
+      pos.legs.map(function(leg,i){
+        if(!leg.transactions||!leg.transactions.length) return '';
+        return '<div style="margin-bottom:12px">'+
+          '<div style="font-size:11px;font-weight:600;margin-bottom:6px">'+
+            '<span style="color:'+(leg.action==='BUY'?'var(--accent)':'var(--red)')+'">'+leg.action+'</span>'+
+            ' '+leg.optType+' '+leg.strike+' ('+leg.expiry+')'+
+            (leg.txnMatched?' <span style="color:var(--accent);font-size:9px;background:var(--accentD);padding:1px 6px;border-radius:3px">VWAP entry used</span>':'')+
+          '</div>'+
+          '<table class="tbl" style="font-size:11px">'+
+            '<thead><tr><th>DATE</th><th>ACTION</th><th>QTY</th><th>TRADE PRICE</th><th>COSTS</th></tr></thead>'+
+            '<tbody>'+
+            leg.transactions.map(function(t){
+              return '<tr>'+
+                '<td style="color:var(--muted)">'+esc(t.date)+'</td>'+
+                '<td><span style="color:'+(t.action==='BUY'?'var(--accent)':'var(--red)')+';font-weight:700">'+t.action+'</span></td>'+
+                '<td>'+t.qty+'</td>'+
+                '<td style="font-weight:600">€'+fmt(t.price)+'</td>'+
+                '<td style="color:var(--muted)">'+( t.costs?'€'+fmt(Math.abs(t.costs)):'—')+'</td>'+
+                '</tr>';
+            }).join('')+
+            '</tbody>'+
+          '</table>'+
+        '</div>';
+      }).join('')+
+    '</div>'
+  : '')+
+
+  '</div>'+
+  (pos.notes?'<div class="card-sm" style="margin-bottom:12px;font-size:12px;color:var(--muted)"><span style="color:var(--text)">Notes: </span>'+esc(pos.notes)+'</div>':'')+
+  '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+    (pos.status==='Open'?'<button class="btn-ghost" id="btn-close-pos">Mark Closed</button>':'')+
+    '<button class="btn-danger" id="btn-del-pos">Delete</button>'+
+  '</div>';
+}
+
+// --- Market Data --------------------------------------------------------------
+function renderMarket(){
+  var statusColor=state.eurexApiOk===true?'var(--accent)':state.eurexApiOk===false?'var(--red)':'var(--muted)';
+  var statusLabel=state.eurexApiOk===true?'LIVE':state.eurexApiOk===false?'ERROR':'EUREX API';
+
+  var inner='';
+  if(state.eurexSelected){
+    inner=renderEurexDetail();
+  } else {
+    var chips=['ODAX','OESX','FGBL','OGBL','OSMI'].map(function(id){
+      return '<button class="btn-ghost" style="border-radius:20px;padding:3px 12px;font-size:11px;color:var(--accent);border-color:rgba(0,229,180,.2);background:var(--accentD)" data-eurex-chip="'+id+'">'+id+'</button>';
+    }).join('');
+
+    var results='';
+    if(state.eurexLoading){
+      results='<div style="color:var(--muted);padding:12px 0">Searching…</div>';
+    } else if(state.eurexError){
+      results='<div style="color:var(--red);padding:10px 14px;background:var(--redD);border-radius:8px;font-size:12px">'+esc(state.eurexError)+'</div>';
+    } else if(state.eurexResults.length){
+      results=state.eurexResults.map(function(p){
+        return '<div class="card-sm row-click" style="margin-bottom:6px;display:flex;align-items:center;gap:12px" data-eurex-pick="'+esc(p.productId)+'">'+
+          '<span style="font-family:var(--display);font-weight:700;color:var(--accent);min-width:64px">'+esc(p.productId)+'</span>'+
+          '<span style="flex:1;font-size:12px">'+esc(p.productNameLong)+'</span>'+
+          '<span style="font-size:11px;color:var(--muted)">'+esc(p.currency)+'</span>'+
+          '<span style="font-size:11px;color:var(--accent)">VIEW →</span>'+
+          '</div>';
+      }).join('');
+    }
+
+    inner='<div style="display:flex;gap:8px;margin-bottom:12px">'+
+      '<input id="eurex-inp" type="text" placeholder="Product ID e.g. ODAX…" value="'+esc(state.eurexSearch||'')+'" style="flex:1"/>'+
+      '<button class="btn-accent" id="btn-eurex-search">SEARCH</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'+chips+'</div>'+
+    results;
+  }
+
+  return '<div class="section-title">Eurex Market Data</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Live reference data via Deutsche Börse GraphQL API</div>'+
+    '<div class="card">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">'+
+        '<span style="font-family:var(--display);font-weight:700;font-size:15px">Eurex Reference Data</span>'+
+        '<div style="display:flex;align-items:center;gap:6px">'+
+          '<div style="width:7px;height:7px;border-radius:50%;background:'+statusColor+'"></div>'+
+          '<span style="font-size:10px;color:var(--muted);letter-spacing:.06em">'+statusLabel+'</span>'+
+        '</div>'+
+      '</div>'+
+      inner+
+    '</div>';
+}
+
+function renderEurexDetail(){
+  var p=state.eurexSelected;
+  var specs=[['TYPE',p.productType],['CURRENCY',p.currency],['TICK SIZE',p.tickSize||'—'],['TICK VALUE',p.tickValue?'€'+p.tickValue:'—']];
+  var specHtml=specs.map(function(s){
+    return '<div style="background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:10px 14px">'+
+      '<div style="font-size:9px;letter-spacing:.1em;color:var(--muted);margin-bottom:5px">'+s[0]+'</div>'+
+      '<div style="font-weight:600;font-size:13px">'+esc(s[1])+'</div>'+
+      '</div>';
+  }).join('');
+
+  var contractsHtml='';
+  if(state.eurexContractsLoading){
+    contractsHtml='<div style="color:var(--muted);font-size:12px;padding:12px 0">Loading contracts…</div>';
+  } else if(state.eurexContracts.length){
+    var byExpiry={};
+    state.eurexContracts.forEach(function(c){
+      if(!byExpiry[c.expirationDate]) byExpiry[c.expirationDate]=[];
+      byExpiry[c.expirationDate].push(c);
+    });
+    var dates=Object.keys(byExpiry).sort().slice(0,4);
+    contractsHtml='<div style="font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">AVAILABLE CONTRACTS · '+state.eurexContracts.length+' shown</div>';
+    contractsHtml+=dates.map(function(exp){
+      var list=byExpiry[exp];
+      var calls=list.filter(function(c){return c.callPutFlag==='C';}).sort(function(a,b){return a.strikePrice-b.strikePrice;});
+      var puts=list.filter(function(c){return c.callPutFlag==='P';}).sort(function(a,b){return a.strikePrice-b.strikePrice;});
+      var callBadges=calls.slice(0,8).map(function(c){return '<span style="background:rgba(0,229,180,.08);color:var(--accent);border:1px solid rgba(0,229,180,.15);border-radius:4px;padding:2px 7px;font-size:11px">'+c.strikePrice+'</span>';}).join(' ');
+      if(calls.length>8) callBadges+='<span style="color:var(--muted);font-size:11px">+'+( calls.length-8)+'</span>';
+      var putBadges=puts.slice(0,8).map(function(c){return '<span style="background:rgba(255,69,96,.08);color:var(--red);border:1px solid rgba(255,69,96,.15);border-radius:4px;padding:2px 7px;font-size:11px">'+c.strikePrice+'</span>';}).join(' ');
+      if(puts.length>8) putBadges+='<span style="color:var(--muted);font-size:11px">+'+( puts.length-8)+'</span>';
+      return '<div style="margin-bottom:14px;background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:14px">'+
+        '<div style="font-size:11px;color:var(--yellow);margin-bottom:10px;font-weight:600">📅 '+exp+'</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+          '<div><div style="font-size:9px;color:var(--accent);letter-spacing:.08em;margin-bottom:6px">CALLS ('+calls.length+')</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+callBadges+'</div></div>'+
+          '<div><div style="font-size:9px;color:var(--red);letter-spacing:.08em;margin-bottom:6px">PUTS ('+puts.length+')</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+putBadges+'</div></div>'+
+        '</div></div>';
+    }).join('');
+  }
+
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'+
+    '<button class="btn-ghost" style="font-size:11px" id="btn-eurex-back">← BACK</button>'+
+    '<span style="font-family:var(--display);font-weight:800;font-size:16px;color:var(--accent)">'+esc(p.productId)+'</span>'+
+    '<span style="font-size:12px;color:var(--muted)">'+esc(p.productNameLong)+'</span>'+
+    '<button class="btn-accent" style="margin-left:auto;padding:6px 14px;font-size:11px" id="btn-eurex-use">+ USE IN POSITION</button>'+
+  '</div>'+
+  '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">'+specHtml+'</div>'+
+  contractsHtml;
+}
+
+// --- Import -------------------------------------------------------------------
+function renderImport(){
+  return '<div class="section-title">DeGiro Import</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:20px">Upload your portfolio CSV and/or transaction history to auto-import positions with real entry prices</div>'+
+
+    // -- Transaction history uploader (always visible at top) --
+    '<div class="card" style="margin-bottom:16px">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+
+        '<span style="font-size:18px">📋</span>'+
+        '<div>'+
+          '<div style="font-family:var(--display);font-weight:700;font-size:14px">Transaction History <span style="font-size:10px;color:var(--accent);background:var(--accentD);padding:2px 8px;border-radius:10px;vertical-align:middle">STEP 1 — OPTIONAL</span></div>'+
+          '<div style="color:var(--muted);font-size:11px;margin-top:2px">Upload your DeGiro transaction history CSV to get real trade prices (Activity → Transactions → Export)</div>'+
+        '</div>'+
+      '</div>'+
+      (state.txnHistFile?
+        '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0a0c10;border:1px solid rgba(0,229,180,.25);border-radius:8px">'+
+          '<span style="color:var(--accent);font-size:16px">✓</span>'+
+          '<div style="flex:1">'+
+            '<div style="font-size:12px;font-weight:600;color:var(--accent)">'+esc(state.txnHistFile)+'</div>'+
+            '<div style="font-size:11px;color:var(--muted);margin-top:2px">'+state.txnHistTxns.filter(function(t){return t.isOption;}).length+' option transactions loaded — entry prices will be used for P&amp;L</div>'+
+          '</div>'+
+          '<label for="txn-hist-inp" style="cursor:pointer"><span class="btn-ghost" style="font-size:11px;padding:6px 12px;border-radius:6px">REPLACE</span></label>'+
+          '<input type="file" id="txn-hist-inp" accept=".csv,.txt" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"/>'+
+        '</div>':
+        '<label for="txn-hist-inp" class="drop-zone" style="display:block;cursor:pointer;padding:20px">'+
+          '<div style="font-size:24px;margin-bottom:8px">📤</div>'+
+          '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Upload Transaction History CSV</div>'+
+          '<div style="color:var(--muted);font-size:11px;margin-bottom:10px">Activity → Transactions → set date range → Export CSV</div>'+
+          '<span class="btn-ghost" style="display:inline-block;padding:7px 18px;border-radius:8px;font-size:12px;pointer-events:none">CHOOSE FILE</span>'+
+          '<input type="file" id="txn-hist-inp" accept=".csv,.txt" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"/>'+
+        '</label>')+
+      (state.txnHistError?'<div style="color:var(--red);margin-top:10px;padding:10px 14px;background:var(--redD);border-radius:8px;font-size:12px">'+esc(state.txnHistError)+'</div>':'')+
+      '<div style="margin-top:12px;background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:10px;color:var(--muted)">'+
+        '<span style="color:var(--yellow)">Expected columns:</span> Datum · Tijd · Product · Aantal · <span style="color:var(--accent)">Koers</span> (trade price) · Waarde · Transactiekosten · Totaal'+
+      '</div>'+
+    '</div>'+
+
+    // -- Portfolio / positions uploader --
+    // When in preview or done state, renderImportPanel manages its own layout
+    (state.importStep==='idle'?
+      '<div class="card" style="margin-bottom:16px">'+
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+
+          '<span style="font-size:18px">🏦</span>'+
+          '<div>'+
+            '<div style="font-family:var(--display);font-weight:700;font-size:14px">Portfolio CSV <span style="font-size:10px;color:var(--degiro);background:var(--degiroD);padding:2px 8px;border-radius:10px;vertical-align:middle">STEP 2</span></div>'+
+            '<div style="color:var(--muted);font-size:11px;margin-top:2px">Upload your portfolio or options position export to detect spreads</div>'+
+          '</div>'+
+        '</div>'+
+        renderImportPanel()+
+      '</div>'
+    :
+      '<div style="margin-bottom:16px">'+renderImportPanel()+'</div>'
+    );
+}
+
+function renderImportPanel(){
+  if(state.importStep==='done'){
+    // No wrapping card -- parent already provides one
+    return '<div style="text-align:center;padding:24px 0">'+
+      '<div style="font-size:40px;margin-bottom:12px">✅</div>'+
+      '<div style="font-family:var(--display);font-weight:800;font-size:18px;color:var(--accent);margin-bottom:8px">Import successful!</div>'+
+      '<div style="color:var(--muted);font-size:13px;margin-bottom:20px">'+Object.keys(state.importSelected).filter(function(k){return state.importSelected[k];}).length+' positions imported</div>'+
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:4px">'+
+        '<button class="btn-accent" data-goto="dashboard" style="width:220px;padding:11px">GO TO OVERVIEW →</button>'+
+        '<button class="btn-ghost" id="btn-import-again" style="width:220px;padding:11px">IMPORT ANOTHER FILE</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  if(state.importStep==='preview'){
+    return renderImportPreview();
+  }
+
+  // Idle state -- no wrapping card, parent provides it
+  return '<label for="file-inp" class="drop-zone" id="drop-zone" style="display:block;cursor:pointer">'+
+    '<div style="font-size:36px;margin-bottom:10px">📂</div>'+
+    '<div style="font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:6px">Tap to choose your portfolio CSV</div>'+
+    '<div style="color:var(--muted);font-size:12px;margin-bottom:14px">supports .csv and .txt files</div>'+
+    '<span class="btn-degiro" style="display:inline-block;padding:9px 22px;border-radius:8px;font-weight:700;pointer-events:none">CHOOSE FILE</span>'+
+    '<input type="file" id="file-inp" accept=".csv,.txt" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"/>'+
+  '</label>'+
+  (state.importError?'<div style="color:var(--red);margin-top:12px;padding:10px 14px;background:var(--redD);border-radius:8px;font-size:12px">'+esc(state.importError)+'</div>':'')+
+  '<div style="margin-top:14px;background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:14px">'+
+    '<div style="font-size:9px;color:var(--muted);letter-spacing:.07em;margin-bottom:8px">EXPECTED FORMAT</div>'+
+    '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;overflow-x:auto;white-space:nowrap">'+
+      'Product;Aantal;Slotkoers;Aankoopkoers;Datum...<br/>'+
+      'Odax p19000.00 20feb26;-5;95.00;110.00;20-02-2026<br/>'+
+      'Odax p18500.00 20feb26;5;60.00;50.00;20-02-2026'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--muted);margin-top:8px">💡 <span style="color:var(--accent)">Slotkoers</span> = current price &nbsp;·&nbsp; <span style="color:var(--accent)">Aankoopkoers</span> = entry price &nbsp;·&nbsp; <span style="color:var(--accent)">Aantal</span> = quantity</div>'+
+  '</div>';
+}
+
+function renderImportPreview(){
+  var txns=state.importTxns;
+  var poss=state.importPositions;
+  var selCount=Object.keys(state.importSelected).filter(function(k){return state.importSelected[k];}).length;
+
+  var statsHtml=[
+    {l:'TOTAL ROWS',v:txns.length,c:'var(--text)'},
+    {l:'OPTION POSITIONS',v:poss.length,c:'var(--accent)'},
+    {l:'OTHER ROWS',v:txns.filter(function(t){return !t.isOption;}).length,c:'var(--muted)'},
+    {l:'SELECTED',v:selCount,c:'var(--yellow)'},
+  ].map(function(m){
+    return '<div style="background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:10px 14px">'+
+      '<div style="font-size:9px;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">'+m.l+'</div>'+
+      '<div style="font-family:var(--display);font-weight:800;font-size:20px;color:'+m.c+'">'+m.v+'</div>'+
+      '</div>';
+  }).join('');
+
+  var posHtml='';
+  if(poss.length){
+    posHtml='<div style="font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">DETECTED OPTION POSITIONS — tap to select</div>';
+    posHtml+=poss.map(function(pos){
+      var checked=!!state.importSelected[pos.id];
+      return '<div class="pos-row row-click" style="border-color:'+(checked?'rgba(0,229,180,.3)':'var(--border)')+';margin-bottom:8px" data-toggle-import="'+pos.id+'">'+
+        '<div style="display:flex;align-items:center;gap:12px">'+
+          '<div style="width:18px;height:18px;border-radius:4px;border:2px solid '+(checked?'var(--accent)':'var(--muted)')+';background:'+(checked?'var(--accent)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+
+            (checked?'<span style="color:#000;font-size:12px;font-weight:900">✓</span>':'')+
+          '</div>'+
+          '<div style="flex:1">'+
+            '<div style="font-family:var(--display);font-weight:700;color:var(--accent)">'+esc(pos.ticker)+' <span style="color:var(--muted);font-size:11px;font-family:var(--mono)">'+esc(pos.type)+'</span></div>'+
+            '<div style="font-size:11px;color:var(--muted)">'+pos.legs.length+' legs · '+pos.contracts+'x · '+pos.openDate+'</div>'+
+          '</div>'+
+          '<span class="badge badge-degiro">DeGiro</span>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  } else {
+    posHtml='<div style="padding:16px;background:var(--degiroD);border:1px solid rgba(255,107,53,.2);border-radius:8px;color:var(--muted);font-size:13px">'+
+      '⚠️ No option positions detected. Check product names match format: "Odax p19000.00 20feb26"</div>';
+  }
+
+  // Transactions preview table
+  var tRows=txns.slice(0,15).map(function(t){
+    var typeCell=t.isOption?
+      '<span style="color:'+(t.optType==='CALL'?'var(--accent)':'var(--red)')+';font-weight:700;font-size:10px">'+t.optType+'</span>':
+      '<span style="color:var(--muted);font-size:10px">EQUITY</span>';
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px;white-space:nowrap">'+esc(t.date)+'</td>'+
+      '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(t.product)+'</td>'+
+      '<td>'+typeCell+'</td>'+
+      '<td style="font-weight:600">'+(t.strike!=null?t.strike:'—')+'</td>'+
+      '<td style="color:var(--muted);font-size:11px;white-space:nowrap">'+esc(t.expiry||'—')+'</td>'+
+      '<td style="color:'+(t.qty<0?'var(--red)':'var(--accent)')+';font-weight:600">'+t.qty+'</td>'+
+      '<td>'+(t.entryPrice!=null?'€'+fmt(t.entryPrice):'—')+'</td>'+
+      '<td style="color:var(--yellow)">'+(t.currentPrice!=null?'€'+fmt(t.currentPrice):'—')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  return '<div class="card" style="margin-bottom:14px">'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'+
+      '<button class="btn-ghost" style="font-size:11px" id="btn-preview-back">← BACK</button>'+
+      '<span style="font-family:var(--display);font-weight:800;font-size:15px">Preview Import</span>'+
+      '<span style="font-size:11px;color:var(--muted)">'+txns.length+' rows · '+poss.length+' positions</span>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px">'+statsHtml+'</div>'+
+    posHtml+
+    '<div style="margin-top:18px">'+
+      '<div style="font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">ALL ROWS (first 15 of '+txns.length+')</div>'+
+      '<div style="overflow-x:auto"><table class="tbl">'+
+        '<thead><tr><th>DATE</th><th>PRODUCT</th><th>TYPE</th><th>STRIKE</th><th>EXPIRY</th><th>QTY</th><th>ENTRY €</th><th>CURRENT €</th></tr></thead>'+
+        '<tbody>'+tRows+'</tbody>'+
+      '</table></div>'+
+      (txns.length>15?'<div style="color:var(--muted);font-size:11px;margin-top:8px">…and '+(txns.length-15)+' more rows</div>':'')+
+    '</div>'+
+  '</div>'+
+  '<div style="display:flex;gap:8px">'+
+    '<button class="btn-accent" id="btn-do-import" style="flex:1;padding:12px">IMPORT '+selCount+' POSITION'+(selCount!==1?'S':'')+'</button>'+
+    '<button class="btn-ghost" id="btn-preview-back2">CANCEL</button>'+
+  '</div>';
+}
+
+// --- Add Position -------------------------------------------------------------
+function renderAdd(){
+  if(!state.newPos) state.newPos={ticker:'',type:'Bull Call Spread',contracts:1,notes:'',status:'Open',openDate:new Date().toISOString().split('T')[0]};
+  var np=state.newPos;
+
+  var typeOpts=SPREAD_TYPES.map(function(t){return '<option value="'+esc(t)+'"'+(t===np.type?' selected':'')+'>'+esc(t)+'</option>';}).join('');
+  var statusOpts=STATUSES.map(function(s){return '<option value="'+esc(s)+'"'+(s===np.status?' selected':'')+'>'+esc(s)+'</option>';}).join('');
+
+  var legsHtml=(state.newLegs||[]).map(function(leg,i){
+    return '<div class="leg-row">'+
+      '<span style="color:'+(leg.action==='BUY'?'var(--accent)':'var(--red)')+';font-weight:700;font-size:11px;width:36px">'+leg.action+'</span>'+
+      '<span style="color:var(--muted);font-size:11px">'+leg.optType+'</span>'+
+      '<span style="font-weight:600">'+leg.strike+'</span>'+
+      '<span style="color:var(--muted);font-size:11px">'+leg.expiry+'</span>'+
+      '<span style="margin-left:auto;color:var(--muted);font-size:11px">@€'+leg.entryPremium+'</span>'+
+      '<button style="background:transparent;color:var(--red);font-size:18px;border:none;padding:0 4px;line-height:1" data-del-leg="'+i+'">×</button>'+
+    '</div>';
+  }).join('');
+
+  var legForm=state.addLegOpen?
+    '<div style="background:#0a0c10;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">'+
+      '<div class="form-grid-2">'+
+        '<div class="form-field"><label class="form-label">ACTION</label><select id="new-leg-action"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>'+
+        '<div class="form-field"><label class="form-label">TYPE</label><select id="new-leg-type"><option value="CALL">CALL</option><option value="PUT">PUT</option></select></div>'+
+        '<div class="form-field"><label class="form-label">EXPIRY</label><input type="date" id="new-leg-expiry"/></div>'+
+        '<div class="form-field"><label class="form-label">STRIKE</label><input type="number" id="new-leg-strike" placeholder="22000"/></div>'+
+        '<div class="form-field"><label class="form-label">ENTRY PREMIUM</label><input type="number" step="0.01" id="new-leg-entry" placeholder="180"/></div>'+
+        '<div class="form-field"><label class="form-label">CURRENT PREMIUM</label><input type="number" step="0.01" id="new-leg-current" placeholder="same as entry"/></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;margin-top:4px">'+
+        '<button class="btn-accent" style="padding:7px 16px" id="btn-add-leg-confirm">ADD</button>'+
+        '<button class="btn-ghost" style="padding:7px 12px" id="btn-add-leg-cancel">CANCEL</button>'+
+      '</div>'+
+    '</div>':'';
+
+  return '<div class="section-title">New Position</div>'+
+  '<div class="two-col">'+
+    '<div class="card">'+
+      '<div style="font-family:var(--display);font-weight:700;font-size:13px;margin-bottom:14px">Details</div>'+
+      '<div class="form-field"><label class="form-label">PRODUCT ID</label><input type="text" id="np-ticker" value="'+esc(np.ticker)+'" placeholder="e.g. ODAX"/></div>'+
+      '<div class="form-field"><label class="form-label">CONTRACTS</label><input type="number" id="np-contracts" value="'+np.contracts+'" min="1"/></div>'+
+      '<div class="form-field"><label class="form-label">OPEN DATE</label><input type="date" id="np-date" value="'+np.openDate+'"/></div>'+
+      '<div class="form-field"><label class="form-label">STRATEGY</label><select id="np-type">'+typeOpts+'</select></div>'+
+      '<div class="form-field"><label class="form-label">STATUS</label><select id="np-status">'+statusOpts+'</select></div>'+
+      '<div class="form-field"><label class="form-label">NOTES</label><input type="text" id="np-notes" value="'+esc(np.notes||'')+'" placeholder="optional"/></div>'+
+    '</div>'+
+    '<div>'+
+      '<div class="card" style="margin-bottom:14px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">'+
+          '<span style="font-family:var(--display);font-weight:700;font-size:13px">Legs ('+(state.newLegs||[]).length+')</span>'+
+          '<button class="btn-ghost" style="color:var(--accent);border-color:rgba(0,229,180,.2);background:var(--accentD);font-size:11px" id="btn-open-leg-form">+ ADD LEG</button>'+
+        '</div>'+
+        legForm+
+        (legsHtml||'<div style="color:var(--muted);font-size:11px">No legs yet</div>')+
+      '</div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<button class="btn-accent" style="flex:1;padding:11px" id="btn-save-pos">SAVE POSITION</button>'+
+        '<button class="btn-ghost" style="padding:11px 16px" data-goto="positions">CANCEL</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+
+// --- Event Binding ------------------------------------------------------------
+function bindEvents(){
+  var main=document.getElementById('main');
+
+  // Generic nav via data-goto
+  main.querySelectorAll('[data-goto]').forEach(function(el){
+    el.addEventListener('click',function(){
+      state.view=this.getAttribute('data-goto');
+      render();
+    });
+  });
+
+  // Filter pills
+  main.querySelectorAll('[data-filter]').forEach(function(el){
+    el.addEventListener('click',function(){
+      state.filter=this.getAttribute('data-filter');
+      render();
+    });
+  });
+
+  // Position row clicks
+  main.querySelectorAll('[data-posid][data-goto="detail"]').forEach(function(el){
+    el.addEventListener('click',function(){
+      state.selectedId=Number(this.getAttribute('data-posid'))||this.getAttribute('data-posid');
+      // Try numeric first
+      var numId=Number(this.getAttribute('data-posid'));
+      state.selectedId=isNaN(numId)?this.getAttribute('data-posid'):numId;
+      state.view='detail';
+      render();
+    });
+  });
+
+  // Editable premiums
+  main.querySelectorAll('[data-edit-prem]').forEach(function(el){
+    el.addEventListener('click',function(){
+      state.editPrem={posId:state.selectedId,legIdx:Number(this.getAttribute('data-edit-prem'))};
+      render();
+      var inp=document.getElementById('prem-input');
+      if(inp){
+        inp.focus();
+        inp.select();
+        function save(){
+          var pos=state.positions.find(function(p){return p.id===state.selectedId;});
+          if(pos){
+            var val=parseFloat(inp.value);
+            if(!isNaN(val)) pos.legs[state.editPrem.legIdx].currentPremium=val;
+          }
+          state.editPrem=null;
+          render();
+        }
+        inp.addEventListener('blur',save);
+        inp.addEventListener('keydown',function(e){if(e.key==='Enter') save();});
+      }
+    });
+  });
+
+  // Edit entry premium
+  main.querySelectorAll('[data-edit-entry]').forEach(function(el){
+    el.addEventListener('click',function(){
+      state.editEntry={posId:state.selectedId,legIdx:Number(this.getAttribute('data-edit-entry'))};
+      state.editPrem=null;
+      render();
+      var inp=document.getElementById('entry-input');
+      if(inp){
+        inp.focus();inp.select();
+        function saveEntry(){
+          var pos=state.positions.find(function(p){return p.id===state.selectedId;});
+          if(pos){
+            var val=parseFloat(inp.value);
+            if(!isNaN(val)) pos.legs[state.editEntry.legIdx].entryPremium=val;
+          }
+          state.editEntry=null;render();
+        }
+        inp.addEventListener('blur',saveEntry);
+        inp.addEventListener('keydown',function(e){if(e.key==='Enter') saveEntry();});
+      }
+    });
+  });
+
+  // Close/delete position
+  var btnClose=document.getElementById('btn-close-pos');
+  if(btnClose) btnClose.addEventListener('click',function(){
+    var pos=state.positions.find(function(p){return p.id===state.selectedId;});
+    if(pos){pos.status='Closed';pos.closeDate=new Date().toISOString().split('T')[0];}
+    state.view='positions';render();
+  });
+  var btnDel=document.getElementById('btn-del-pos');
+  if(btnDel) btnDel.addEventListener('click',function(){
+    // Replace button with inline confirm (confirm() blocked in some iOS webviews)
+    var row=btnDel.parentNode;
+    var orig=row.innerHTML;
+    row.innerHTML='<span style="color:var(--muted);font-size:12px;margin-right:10px">Delete this position?</span>'+
+      '<button class="btn-danger" id="btn-del-yes" style="margin-right:6px">YES, DELETE</button>'+
+      '<button class="btn-ghost" id="btn-del-no">CANCEL</button>';
+    document.getElementById('btn-del-yes').addEventListener('click',function(){
+      state.positions=state.positions.filter(function(p){return p.id!==state.selectedId;});
+      state.view='positions';render();
+    });
+    document.getElementById('btn-del-no').addEventListener('click',function(){
+      row.innerHTML=orig;bindEvents();
+    });
+  });
+
+  // Eurex search
+  var eurexInp=document.getElementById('eurex-inp');
+  var btnSearch=document.getElementById('btn-eurex-search');
+  if(btnSearch) btnSearch.addEventListener('click',doEurexSearch);
+  if(eurexInp) eurexInp.addEventListener('keydown',function(e){if(e.key==='Enter') doEurexSearch();});
+
+  main.querySelectorAll('[data-eurex-chip]').forEach(function(el){
+    el.addEventListener('click',function(){
+      state.eurexSearch=this.getAttribute('data-eurex-chip');
+      doEurexSearch();
+    });
+  });
+  main.querySelectorAll('[data-eurex-pick]').forEach(function(el){
+    el.addEventListener('click',function(){
+      var id=this.getAttribute('data-eurex-pick');
+      var p=state.eurexResults.find(function(r){return r.productId===id;});
+      if(p){state.eurexSelected=p;state.eurexContracts=[];state.eurexContractsLoading=true;render();doEurexContracts(p.productId);}
+    });
+  });
+
+  var btnEB=document.getElementById('btn-eurex-back');
+  if(btnEB) btnEB.addEventListener('click',function(){state.eurexSelected=null;state.eurexContracts=[];render();});
+  var btnEU=document.getElementById('btn-eurex-use');
+  if(btnEU) btnEU.addEventListener('click',function(){
+    state.newPos={ticker:state.eurexSelected.productId,type:'Bull Call Spread',contracts:1,notes:'',status:'Open',openDate:new Date().toISOString().split('T')[0]};
+    state.newLegs=[];state.view='add';render();
+  });
+
+  // Import
+  // Portfolio CSV input
+  var fileInp=document.getElementById('file-inp');
+  if(fileInp){
+    fileInp.onchange=function(){
+      if(this.files&&this.files[0]) handleImportFile(this.files[0]);
+      this.value='';
+    };
+  }
+
+  // Transaction history CSV input
+  var txnInp=document.getElementById('txn-hist-inp');
+  if(txnInp){
+    txnInp.onchange=function(){
+      if(this.files&&this.files[0]) handleTxnHistFile(this.files[0]);
+      this.value='';
+    };
+  }
+
+  // Drag and drop for desktop (label already handles tap on iOS)
+  var dz=document.getElementById('drop-zone');
+  if(dz){
+    dz.addEventListener('dragover',function(e){e.preventDefault();this.style.borderColor='var(--degiro)';this.style.background='var(--degiroD)';});
+    dz.addEventListener('dragleave',function(){this.style.borderColor='var(--border)';this.style.background='#0a0c10';});
+    dz.addEventListener('drop',function(e){
+      e.preventDefault();this.style.borderColor='var(--border)';this.style.background='#0a0c10';
+      if(e.dataTransfer&&e.dataTransfer.files[0]) handleImportFile(e.dataTransfer.files[0]);
+    });
+  }
+
+  var btnIA=document.getElementById('btn-import-again');
+  if(btnIA) btnIA.addEventListener('click',function(){state.importStep='idle';state.importError=null;render();});
+
+  var btnPB=document.getElementById('btn-preview-back');
+  var btnPB2=document.getElementById('btn-preview-back2');
+  function goBackToIdle(){state.importStep='idle';render();}
+  if(btnPB) btnPB.addEventListener('click',goBackToIdle);
+  if(btnPB2) btnPB2.addEventListener('click',goBackToIdle);
+
+  main.querySelectorAll('[data-toggle-import]').forEach(function(el){
+    el.addEventListener('click',function(){
+      var id=this.getAttribute('data-toggle-import');
+      // ids from groupIntoPositions are floats -- compare as strings
+      var found=state.importPositions.find(function(p){return String(p.id)===id;});
+      if(found) state.importSelected[found.id]=!state.importSelected[found.id];
+      render();
+    });
+  });
+
+  var btnDoImport=document.getElementById('btn-do-import');
+  if(btnDoImport) btnDoImport.addEventListener('click',function(){
+    var toImport=state.importPositions.filter(function(p){return state.importSelected[p.id];});
+    // Enrich with transaction history if available
+    if(state.txnHistTxns.length>0){
+      enrichLegsWithTransactions(toImport, state.txnHistTxns);
+    }
+    state.positions=state.positions.concat(toImport);
+    state.transactions=state.transactions.concat(state.importTxns);
+    state.importStep='done';
+    render();
+  });
+
+  // Add position
+  function readNewPos(){
+    if(!state.newPos) return;
+    var f=document.getElementById('np-ticker');if(f)state.newPos.ticker=f.value;
+    var c=document.getElementById('np-contracts');if(c)state.newPos.contracts=+c.value||1;
+    var d=document.getElementById('np-date');if(d)state.newPos.openDate=d.value;
+    var t=document.getElementById('np-type');if(t)state.newPos.type=t.value;
+    var s=document.getElementById('np-status');if(s)state.newPos.status=s.value;
+    var n=document.getElementById('np-notes');if(n)state.newPos.notes=n.value;
+  }
+
+  var btnSave=document.getElementById('btn-save-pos');
+  if(btnSave) btnSave.addEventListener('click',function(){
+    readNewPos();
+    if(!state.newPos.ticker||!state.newLegs||!state.newLegs.length){alert('Please add a product ID and at least one leg.');return;}
+    state.positions.push({
+      id:Date.now(),
+      ticker:state.newPos.ticker,type:state.newPos.type,
+      contracts:state.newPos.contracts,status:state.newPos.status,
+      openDate:state.newPos.openDate,notes:state.newPos.notes,
+      source:'manual',legs:state.newLegs.slice()
+    });
+    state.newPos=null;state.newLegs=[];state.addLegOpen=false;
+    state.view='positions';render();
+  });
+
+  var btnOLF=document.getElementById('btn-open-leg-form');
+  if(btnOLF) btnOLF.addEventListener('click',function(){readNewPos();state.addLegOpen=true;render();});
+
+  var btnALC=document.getElementById('btn-add-leg-confirm');
+  if(btnALC) btnALC.addEventListener('click',function(){
+    var action=document.getElementById('new-leg-action');
+    var optType=document.getElementById('new-leg-type');
+    var expiry=document.getElementById('new-leg-expiry');
+    var strike=document.getElementById('new-leg-strike');
+    var entry=document.getElementById('new-leg-entry');
+    var current=document.getElementById('new-leg-current');
+    if(!expiry.value||!strike.value||!entry.value){alert('Please fill in expiry, strike, and entry premium.');return;}
+    var ep=parseFloat(entry.value)||0;
+    var cp=current.value?parseFloat(current.value):ep;
+    if(!state.newLegs) state.newLegs=[];
+    state.newLegs.push({action:action.value,optType:optType.value,strike:+strike.value,expiry:expiry.value,entryPremium:ep,currentPremium:cp});
+    readNewPos();state.addLegOpen=false;render();
+  });
+
+  var btnALCancel=document.getElementById('btn-add-leg-cancel');
+  if(btnALCancel) btnALCancel.addEventListener('click',function(){readNewPos();state.addLegOpen=false;render();});
+
+  main.querySelectorAll('[data-del-leg]').forEach(function(el){
+    el.addEventListener('click',function(){
+      var i=Number(this.getAttribute('data-del-leg'));
+      readNewPos();state.newLegs.splice(i,1);render();
+    });
+  });
+}
+
+// --- Eurex fetch --------------------------------------------------------------
+function doEurexSearch(){
+  var inp=document.getElementById('eurex-inp');
+  var q=(inp?inp.value:state.eurexSearch||'').toUpperCase().trim();
+  if(!q) return;
+  state.eurexSearch=q;state.eurexResults=[];state.eurexError=null;state.eurexSelected=null;state.eurexContracts=[];state.eurexLoading=true;
+  render();
+  eurexQuery('query($id:String){products(filter:{productId:$id}){productId productNameLong productType currency tickSize tickValue}}',{id:q},function(err,data){
+    state.eurexLoading=false;
+    if(err){state.eurexError='API error: '+err.message;state.eurexApiOk=false;}
+    else{state.eurexResults=data.products||[];state.eurexApiOk=true;if(!state.eurexResults.length)state.eurexError='No product found. Try: ODAX, OESX, FGBL, OGBL';}
+    render();
+  });
+}
+
+function doEurexContracts(productId){
+  eurexQuery('query($pid:String!){contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:productId},function(err,data){
+    state.eurexContractsLoading=false;
+    if(!err){
+      var today=new Date().toISOString().split('T')[0];
+      state.eurexContracts=(data.contracts||[]).filter(function(c){return c.expirationDate>=today;}).sort(function(a,b){return a.expirationDate.localeCompare(b.expirationDate);}).slice(0,60);
+    }
+    render();
+  });
+}
+
+// --- File import --------------------------------------------------------------
+function handleImportFile(file){
+  state.importError=null;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var txns=parseDeGiroCSV(e.target.result);
+      if(!txns.length) throw new Error('No rows found in CSV');
+      var result=groupIntoPositions(txns);
+      state.importTxns=result.all;
+      state.importPositions=result.positions;
+      state.importSelected={};
+      result.positions.forEach(function(p){state.importSelected[p.id]=true;});
+      state.importStep='preview';
+    }catch(ex){
+      state.importError='Parse error: '+ex.message;
+    }
+    render();
+  };
+  reader.onerror=function(){state.importError='Could not read file.';render();};
+  reader.readAsText(file);
+}
+
+// --- Transaction history file handler ----------------------------------------
+function handleTxnHistFile(file){
+  state.txnHistError=null;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var txns=parseDeGiroTransactions(e.target.result);
+      if(!txns.length) throw new Error('No rows found in CSV');
+      state.txnHistTxns=txns;
+      state.txnHistFile=file.name;
+      // If positions are already imported, enrich them immediately
+      if(state.positions.length>0){
+        enrichLegsWithTransactions(state.positions, txns);
+      }
+    }catch(ex){
+      state.txnHistError='Parse error: '+ex.message;
+      state.txnHistFile=null;
+      state.txnHistTxns=[];
+    }
+    render();
+  };
+  reader.onerror=function(){state.txnHistError='Could not read file.';render();};
+  reader.readAsText(file);
+}
+
+// --- Init ---------------------------------------------------------------------
+render();
+</script>
+</body>
+</html>
