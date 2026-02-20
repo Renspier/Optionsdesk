@@ -107,55 +107,33 @@ var fmtPct = function(n){
 var pcClass = function(n){ return n>=0?'pos-green':'pos-red'; };
 var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
 
-// Contract multipliers (premium points -> EUR per contract)
-// ODAX (DAX):        EUR5 per index point
-// OESX (EuroStoxx):  EUR10 per index point
-// OGBL/FGBL (Bund):  EUR10 per tick
-// Default EUR1 (premium already quoted in EUR)
-var MULTIPLIERS = {
-  ODAX: 5,
-  OESX: 10,
-  OESXW: 10,
-  OGBL: 10,
-  FGBL: 10,
-  OSMI: 10,
-};
-function getMultiplier(ticker) {
-  if (!ticker) return 1;
-  return MULTIPLIERS[ticker.toUpperCase()] || 1;
-}
+// P&L formula: sign * (currentPremium - entryPremium) * netContracts * 5
+// - sign: +1 for BUY, -1 for SELL
+// - netContracts: net open contracts from transaction history (or leg.qty from portfolio)
+// - 5: ODAX multiplier (EUR 5 per index point per contract)
+var MULTIPLIER = 5;
 
 function calcPnL(pos){
   var totalPnL=0;
   var entryNet=0;
-  var mult=getMultiplier(pos.ticker);
   for(var i=0;i<pos.legs.length;i++){
     var l=pos.legs[i];
     var curr=l.currentPremium!=null?l.currentPremium:l.entryPremium;
-    var s=l.action==='BUY'?1:-1;  // BUY profits when price rises, SELL profits when price falls
-    var legPnL=s*(curr-l.entryPremium)*mult*pos.contracts;
+    var s=l.action==='BUY'?1:-1;
+    // netContracts: from transaction history if available, else leg qty, else pos.contracts
+    var netContracts=l.netContracts!=null?l.netContracts:(l.qty!=null?l.qty:pos.contracts);
+    var legPnL=s*(curr-l.entryPremium)*netContracts*MULTIPLIER;
     totalPnL+=legPnL;
-    entryNet+=l.action==='SELL'?l.entryPremium:-l.entryPremium;
+    entryNet+=(l.action==='SELL'?1:-1)*l.entryPremium*netContracts*MULTIPLIER;
   }
-  var maxRisk=Math.abs(entryNet)*mult*pos.contracts||1;
+  var maxRisk=Math.abs(entryNet)||1;
   return{entryNet:entryNet,totalPnL:totalPnL,pct:totalPnL/maxRisk*100};
 }
 
 // --- State --------------------------------------------------------------------
 var state = {
   view: 'dashboard',
-  positions: [
-    {id:1,ticker:'ODAX',type:'Bull Call Spread',contracts:5,status:'Open',openDate:'2025-02-10',notes:'DAX bullish play',source:'manual',legs:[
-      {action:'BUY',optType:'CALL',strike:22000,expiry:'2025-03-21',entryPremium:180,currentPremium:240},
-      {action:'SELL',optType:'CALL',strike:22500,expiry:'2025-03-21',entryPremium:80,currentPremium:95}
-    ]},
-    {id:2,ticker:'OESX',type:'Iron Condor',contracts:3,status:'Open',openDate:'2025-02-05',notes:'EURO STOXX 50 range',source:'manual',legs:[
-      {action:'SELL',optType:'PUT',strike:5000,expiry:'2025-03-21',entryPremium:22,currentPremium:12},
-      {action:'BUY',optType:'PUT',strike:4900,expiry:'2025-03-21',entryPremium:10,currentPremium:5},
-      {action:'SELL',optType:'CALL',strike:5400,expiry:'2025-03-21',entryPremium:20,currentPremium:8},
-      {action:'BUY',optType:'CALL',strike:5500,expiry:'2025-03-21',entryPremium:9,currentPremium:3}
-    ]}
-  ],
+  positions: [],
   transactions: [],
   filter: 'All',
   selectedId: null,
@@ -314,7 +292,9 @@ function groupIntoPositions(txns){
         action:t.action, optType:t.optType||'CALL',
         strike:t.strike||0, expiry:t.expiry,
         entryPremium:t.entryPrice!=null?t.entryPrice:(t.currentPrice||0),
-        currentPremium:t.currentPrice!=null?t.currentPrice:(t.entryPrice||0)
+        currentPremium:t.currentPrice!=null?t.currentPrice:(t.entryPrice||0),
+        qty:t.absQty||null,       // per-leg quantity from portfolio CSV
+        netContracts:t.absQty||null  // will be overwritten by enrichLegsWithTransactions
       };})
     });
   }
@@ -405,16 +385,13 @@ function parseDeGiroTransactions(text){
   return result;
 }
 
-// Match transaction history to portfolio positions
-// For each leg, find all transactions for that exact product and compute VWAP entry price
+// Enrich legs with real entry prices and net open contracts from transaction history
 function enrichLegsWithTransactions(positions, txns){
   var optTxns=txns.filter(function(t){return t.isOption&&t.koers!=null;});
 
   positions.forEach(function(pos){
     pos.legs.forEach(function(leg){
-      // Build a product key from leg data to match against transaction product names
-      // leg.expiry is YYYY-MM-DD, transactions have product like "Odax p19000.00 20feb26"
-      // Match by ticker + strike + optType + expiry
+      // Match transactions by ticker + optType + strike + expiry
       var matches=optTxns.filter(function(t){
         return t.ticker===pos.ticker &&
                t.optType===leg.optType &&
@@ -423,17 +400,19 @@ function enrichLegsWithTransactions(positions, txns){
       });
 
       if(matches.length>0){
-        // Compute VWAP (volume-weighted average price) from all matched transactions
-        // Separate buys and sells
         var buys=matches.filter(function(t){return t.action==='BUY';});
         var sells=matches.filter(function(t){return t.action==='SELL';});
-
-        // Net position determines the leg action
         var totalBuyQty=buys.reduce(function(s,t){return s+t.absQty;},0);
         var totalSellQty=sells.reduce(function(s,t){return s+t.absQty;},0);
-        var netQty=totalBuyQty-totalSellQty;
 
-        // VWAP of opening trades (whichever direction opened the position)
+        // Net open contracts: buys minus sells (or sells minus buys for short leg)
+        // Positive = net long, negative = net short
+        var netQty=Math.abs(totalBuyQty-totalSellQty);
+        // If no net (fully closed), use the larger side
+        if(netQty===0) netQty=Math.max(totalBuyQty,totalSellQty);
+        leg.netContracts=netQty;
+
+        // VWAP entry price from opening trades
         var openingTrades=leg.action==='BUY'?buys:sells;
         if(openingTrades.length>0){
           var totalQty=openingTrades.reduce(function(s,t){return s+t.absQty;},0);
@@ -441,23 +420,21 @@ function enrichLegsWithTransactions(positions, txns){
           var vwap=totalQty>0?totalVal/totalQty:null;
           if(vwap!=null){
             leg.entryPremium=Math.round(vwap*100)/100;
-            leg.txnCount=openingTrades.length;
             leg.txnMatched=true;
           }
         }
 
-        // Track all transactions on this leg for display
+        // Store all transactions on leg for display
         leg.transactions=matches.map(function(t){
           return{date:t.date,action:t.action,qty:t.absQty,price:t.koers,costs:t.costs};
         });
-        leg.contracts=Math.max(totalBuyQty,totalSellQty);
       }
     });
 
-    // Update position contracts from legs if transactions were matched
-    var matchedLegs=pos.legs.filter(function(l){return l.txnMatched;});
+    // Update pos.contracts to reflect actual net open contracts
+    var matchedLegs=pos.legs.filter(function(l){return l.netContracts!=null;});
     if(matchedLegs.length>0){
-      pos.contracts=Math.max.apply(null,pos.legs.map(function(l){return l.contracts||pos.contracts;}));
+      pos.contracts=Math.max.apply(null,matchedLegs.map(function(l){return l.netContracts;}));
       pos.txnMatched=true;
     }
   });
@@ -641,8 +618,8 @@ function renderDetail(){
   var legsHtml=pos.legs.map(function(leg,i){
     var s=leg.action==='SELL'?1:-1;
     var legSign=leg.action==='BUY'?1:-1;
-    var mult=getMultiplier(pos.ticker);
-    var lp=legSign*(leg.currentPremium-leg.entryPremium)*mult*pos.contracts;
+    var legQty=leg.netContracts!=null?leg.netContracts:(leg.qty!=null?leg.qty:pos.contracts);
+    var lp=legSign*(leg.currentPremium-leg.entryPremium)*legQty*MULTIPLIER;
     var isEdCurr=state.editPrem&&state.editPrem.posId===pos.id&&state.editPrem.legIdx===i;
     var isEdEntry=state.editEntry&&state.editEntry.posId===pos.id&&state.editEntry.legIdx===i;
     var currCell=isEdCurr?
