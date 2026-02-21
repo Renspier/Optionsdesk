@@ -226,11 +226,13 @@ function parseDeGiroCSV(text){
   var iCurr=col('valuta','currency');
 
   var result=[];
+  var vals=[];
+  function gTxn(idx){return idx>=0?(vals[idx]||'').trim():'';}
   for(var i=1;i<lines.length;i++){
     var line=lines[i];
     if(!line.trim()) continue;
-    var vals=parseCsvLine(line,sep);
-    function g(idx){return idx>=0?(vals[idx]||'').trim():'';}
+    vals=parseCsvLine(line,sep);
+    var g=gTxn;
     var product=g(iProduct);
     if(!product) continue;
     var qty=parseNum(g(iQty))||0;
@@ -334,11 +336,13 @@ function parseDeGiroTransactions(text){
   // If we have both waarde and totaal, prefer totaal (includes costs)
   // But for price per unit we want koers
   var result=[];
+  var vals=[];
+  function gCsv(idx){return idx>=0?(vals[idx]||'').trim():'';}
   for(var i=1;i<lines.length;i++){
     var line=lines[i];
     if(!line.trim()) continue;
-    var vals=parseCsvLine(line,sep);
-    function g(idx){return idx>=0?(vals[idx]||'').trim():'';}
+    vals=parseCsvLine(line,sep);
+    var g=gCsv;
 
     var product=g(iProduct);
     if(!product) continue;
@@ -465,7 +469,7 @@ function render(){
 
   // Nav
   var navEl=document.getElementById('nav');
-  var navItems=[['dashboard','OVERVIEW'],['positions','POSITIONS'],['market','EUREX'],['import','⬆ DEGIRO'],['add','+ NEW']];
+  var navItems=[['dashboard','OVERVIEW'],['positions','POSITIONS'],['analytics','ANALYTICS'],['market','EUREX'],['import','⬆ DEGIRO'],['add','+ NEW']];
   navEl.innerHTML=navItems.map(function(item){
     var v=item[0],l=item[1];
     var cls='navbtn';
@@ -486,6 +490,7 @@ function render(){
   if(state.view==='dashboard') html+=renderDashboard();
   else if(state.view==='positions') html+=renderPositions();
   else if(state.view==='detail') html+=renderDetail();
+  else if(state.view==='analytics') html+=renderAnalytics();
   else if(state.view==='market') html+=renderMarket();
   else if(state.view==='import') html+=renderImport();
   else if(state.view==='add') html+=renderAdd();
@@ -501,7 +506,19 @@ function renderDashboard(){
   var totalPnL=openPos.reduce(function(s,p){return s+calcPnL(p).totalPnL;},0);
   var realPnL=closedPos.reduce(function(s,p){return s+calcPnL(p).totalPnL;},0);
   var winners=closedPos.filter(function(p){return calcPnL(p).totalPnL>0;}).length;
-  var winRate=closedPos.length?Math.round(winners/closedPos.length*100)+'%':'—';
+  var winRate=closedPos.length?Math.round(winners/closedPos.length*100)+'%':'--';
+
+  // Portfolio risk: (sum of BUY strikes - sum of SELL strikes) * 5
+  var totalBuyStrikes=0, totalSellStrikes=0;
+  openPos.forEach(function(pos){
+    pos.legs.forEach(function(leg){
+      var qty=leg.netContracts!=null?leg.netContracts:(leg.qty!=null?leg.qty:pos.contracts);
+      if(leg.action==='BUY') totalBuyStrikes+=leg.strike*qty;
+      else totalSellStrikes+=leg.strike*qty;
+    });
+  });
+  var portfolioRisk=(totalBuyStrikes-totalSellStrikes)*MULTIPLIER;
+  var riskColor=portfolioRisk<0?'var(--red)':portfolioRisk===0?'var(--muted)':'var(--accent)';
 
   var metrics=[
     {l:'OPEN P&amp;L',v:fmtE(totalPnL),c:totalPnL>=0?'var(--accent)':'var(--red)',s:openPos.length+' open positions'},
@@ -509,6 +526,29 @@ function renderDashboard(){
     {l:'WIN RATE',v:winRate,c:'var(--yellow)',s:winners+'/'+closedPos.length+' closed'},
     {l:'REALIZED P&amp;L',v:fmtE(realPnL),c:realPnL>=0?'var(--accent)':'var(--red)',s:'closed positions'},
   ];
+
+  var riskHtml=openPos.length===0?'':
+    '<div class="card" style="margin-bottom:16px;border-color:rgba(251,191,36,.25)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">'+
+        '<div>'+
+          '<div style="font-size:9px;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">PORTFOLIO RISK</div>'+
+          '<div style="font-family:var(--display);font-size:26px;font-weight:800;color:'+riskColor+'">'+fmtE(portfolioRisk)+'</div>'+
+          '<div style="font-size:11px;color:var(--muted);margin-top:5px">'+
+            '('+fmtE(totalBuyStrikes)+' bought &minus; '+fmtE(totalSellStrikes)+' sold) &times; 5'+
+          '</div>'+
+        '</div>'+
+        '<div style="display:flex;gap:24px">'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:9px;letter-spacing:.08em;color:var(--muted);margin-bottom:4px">BUY STRIKES</div>'+
+            '<div style="font-size:15px;font-weight:700;color:var(--accent)">'+fmtE(totalBuyStrikes)+'</div>'+
+          '</div>'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:9px;letter-spacing:.08em;color:var(--muted);margin-bottom:4px">SELL STRIKES</div>'+
+            '<div style="font-size:15px;font-weight:700;color:var(--red)">'+fmtE(totalSellStrikes)+'</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
 
   var metricHtml=metrics.map(function(m){
     return '<div class="card" style="position:relative;overflow:hidden">'+
@@ -535,6 +575,7 @@ function renderDashboard(){
   return '<div class="section-title" style="margin-bottom:4px">Portfolio Overview</div>'+
     '<div style="color:var(--muted);font-size:11px;margin-bottom:20px">Eurex Derivatives · EUR</div>'+
     '<div class="metric-grid">'+metricHtml+'</div>'+
+    riskHtml+
     '<div class="card" style="margin-bottom:14px">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
         '<span style="font-family:var(--display);font-weight:700;font-size:14px">Open Positions</span>'+
@@ -693,6 +734,327 @@ function renderDetail(){
     (pos.status==='Open'?'<button class="btn-ghost" id="btn-close-pos">Mark Closed</button>':'')+
     '<button class="btn-danger" id="btn-del-pos">Delete</button>'+
   '</div>';
+}
+
+
+// --- Analytics ----------------------------------------------------------------
+function computeAnalytics(){
+  // Build all transactions from state.txnHistTxns
+  var txns = state.txnHistTxns.filter(function(t){ return t.isOption && t.koers != null; });
+  if(!txns.length) return null;
+
+  // Group by position key: ticker+optType+strike+expiry
+  var groups = {};
+  txns.forEach(function(t){
+    var key = t.ticker+'|'+t.optType+'|'+t.strike+'|'+t.expiry;
+    if(!groups[key]) groups[key] = {ticker:t.ticker,optType:t.optType,strike:t.strike,expiry:t.expiry,trades:[]};
+    groups[key].trades.push(t);
+  });
+
+  var closedPositions = [];  // for analyses 1, 4, 8
+  var rolls = [];            // for analysis 3
+
+  Object.keys(groups).forEach(function(key){
+    var g = groups[key];
+    var trades = g.trades.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
+    var buys  = trades.filter(function(t){ return t.action==='BUY'; });
+    var sells = trades.filter(function(t){ return t.action==='SELL'; });
+    var totalBuyQty  = buys.reduce(function(s,t){ return s+t.absQty; }, 0);
+    var totalSellQty = sells.reduce(function(s,t){ return s+t.absQty; }, 0);
+    var matchedQty = Math.min(totalBuyQty, totalSellQty);
+    var netQty = totalBuyQty - totalSellQty; // net open
+
+    // Only analyze positions that are fully or partially closed
+    if(matchedQty === 0) return;
+
+    var vwapBuy  = totalBuyQty  ? buys.reduce(function(s,t){return s+t.koers*t.absQty;},0)/totalBuyQty  : 0;
+    var vwapSell = totalSellQty ? sells.reduce(function(s,t){return s+t.koers*t.absQty;},0)/totalSellQty : 0;
+    var totalCosts = trades.reduce(function(s,t){ return s+Math.abs(t.costs||0); }, 0);
+
+    // Determine direction of the OPENING trade
+    // Opening = first trade in time
+    var firstTrade = trades[0];
+    var openAction = firstTrade.action; // BUY or SELL
+    var openPrice  = openAction==='SELL' ? vwapSell : vwapBuy;
+    var closePrice = openAction==='SELL' ? vwapBuy  : vwapSell;
+
+    // Gross P&L: short = (sell-buy)*qty*5, long = (sell-buy)*qty*5 same formula
+    var grossPnL = (vwapSell - vwapBuy) * matchedQty * MULTIPLIER;
+    var netPnL   = grossPnL - totalCosts;
+
+    // Open date = date of first opening trade, close date = last closing trade
+    var openDate  = firstTrade.date;
+    var closingTrades = openAction==='SELL' ? buys : sells;
+    var closeDate = closingTrades.length ? closingTrades[closingTrades.length-1].date : openDate;
+    // Days held
+    var d1 = new Date(openDate), d2 = new Date(closeDate);
+    var daysHeld = Math.round((d2-d1)/(1000*60*60*24));
+
+    // Premium decay capture (only meaningful for short positions)
+    var captureRate = null;
+    if(openAction==='SELL' && openPrice > 0){
+      captureRate = (openPrice - closePrice) / openPrice * 100;
+    }
+
+    closedPositions.push({
+      key: key,
+      ticker: g.ticker, optType: g.optType, strike: g.strike, expiry: g.expiry,
+      openAction: openAction, openDate: openDate, closeDate: closeDate,
+      openPrice: openPrice, closePrice: closePrice,
+      matchedQty: matchedQty, netQty: netQty,
+      grossPnL: grossPnL, netPnL: netPnL, totalCosts: totalCosts,
+      daysHeld: daysHeld, captureRate: captureRate,
+      trades: trades
+    });
+  });
+
+  // --- Roll detection ---
+  // A roll = on same date, for same ticker+optType: close one strike/expiry AND open another
+  var byDateTicker = {};
+  txns.forEach(function(t){
+    var dk = t.date+'|'+t.ticker+'|'+t.optType;
+    if(!byDateTicker[dk]) byDateTicker[dk]=[];
+    byDateTicker[dk].push(t);
+  });
+
+  Object.keys(byDateTicker).forEach(function(dk){
+    var dayTrades = byDateTicker[dk];
+    var daySells = dayTrades.filter(function(t){ return t.action==='SELL'; });
+    var dayBuys  = dayTrades.filter(function(t){ return t.action==='BUY'; });
+    // A roll: buying back one contract (closing) and selling another (opening) same day
+    // Different strike or expiry involved
+    if(daySells.length > 0 && dayBuys.length > 0){
+      var uniqueKeys = {};
+      dayTrades.forEach(function(t){ uniqueKeys[t.strike+'_'+t.expiry]=1; });
+      if(Object.keys(uniqueKeys).length > 1){
+        // Multiple different contracts traded same day = likely a roll or spread adjustment
+        var parts = dk.split('|');
+        var avgSellStrike = daySells.reduce(function(s,t){return s+t.strike*t.absQty;},0)/daySells.reduce(function(s,t){return s+t.absQty;},0);
+        var avgBuyStrike  = dayBuys.reduce(function(s,t){ return s+t.strike*t.absQty;},0)/dayBuys.reduce(function(s,t){ return s+t.absQty;},0);
+        var avgSellPx = daySells.reduce(function(s,t){return s+t.koers*t.absQty;},0)/daySells.reduce(function(s,t){return s+t.absQty;},0);
+        var avgBuyPx  = dayBuys.reduce(function(s,t){ return s+t.koers*t.absQty;},0)/dayBuys.reduce(function(s,t){ return s+t.absQty;},0);
+        var netCredit = (avgSellPx - avgBuyPx);
+        // Categorize roll type
+        var rollType = 'Adjustment';
+        var sellExpiries = daySells.map(function(t){return t.expiry;});
+        var buyExpiries  = dayBuys.map(function(t){ return t.expiry;});
+        var expiryChange = sellExpiries.join(',') !== buyExpiries.join(',');
+        var strikeChange = Math.abs(avgSellStrike - avgBuyStrike) > 1;
+        if(expiryChange && strikeChange) rollType='Roll (strike + expiry)';
+        else if(expiryChange) rollType='Roll (expiry)';
+        else if(strikeChange) rollType='Roll (strike)';
+        else rollType='Spread adjustment';
+
+        rolls.push({
+          date: parts[0], ticker: parts[1], optType: parts[2],
+          sells: daySells, buys: dayBuys,
+          avgSellStrike: avgSellStrike, avgBuyStrike: avgBuyStrike,
+          avgSellPx: avgSellPx, avgBuyPx: avgBuyPx,
+          netCredit: netCredit, rollType: rollType
+        });
+      }
+    }
+  });
+
+  // Sort rolls by date desc
+  rolls.sort(function(a,b){ return b.date.localeCompare(a.date); });
+
+  return { closedPositions: closedPositions, rolls: rolls };
+}
+
+function renderAnalytics(){
+  var txns = state.txnHistTxns.filter(function(t){ return t.isOption; });
+  var data = computeAnalytics();
+  var noData = '<div class="card" style="text-align:center;padding:40px">'+
+    '<div style="font-size:36px;margin-bottom:12px">📋</div>'+
+    '<div style="font-family:var(--display);font-weight:700;font-size:16px;margin-bottom:8px">No transaction history loaded</div>'+
+    '<div style="color:var(--muted);font-size:12px;margin-bottom:20px">Upload your DeGiro transaction history CSV in the Import tab to enable analytics</div>'+
+    '<button class="btn-ghost" data-goto="import">GO TO IMPORT</button>'+
+  '</div>';
+
+  if(!data || !data.closedPositions.length) return '<div class="section-title">Analytics</div>'+noData;
+
+  var cp = data.closedPositions;
+  var rolls = data.rolls;
+
+  // ── Summary stats ──
+  var winners = cp.filter(function(p){return p.netPnL>0;});
+  var losers  = cp.filter(function(p){return p.netPnL<=0;});
+  var totalNet = cp.reduce(function(s,p){return s+p.netPnL;},0);
+  var totalCosts = cp.reduce(function(s,p){return s+p.totalCosts;},0);
+  var avgCapture = (function(){
+    var shorts = cp.filter(function(p){return p.captureRate!=null;});
+    if(!shorts.length) return null;
+    return shorts.reduce(function(s,p){return s+p.captureRate;},0)/shorts.length;
+  })();
+  var avgDays = cp.reduce(function(s,p){return s+p.daysHeld;},0)/cp.length;
+
+  var summaryHtml = [
+    {l:'REALIZED NET P&L', v:fmtE(totalNet), c:totalNet>=0?'var(--accent)':'var(--red)', s:cp.length+' closed positions'},
+    {l:'WIN RATE', v:Math.round(winners.length/cp.length*100)+'%', c:'var(--yellow)', s:winners.length+' winners / '+losers.length+' losers'},
+    {l:'AVG DECAY CAPTURE', v:avgCapture!=null?Math.round(avgCapture)+'%':'--', c:'var(--accent)', s:'short positions only'},
+    {l:'TOTAL COSTS PAID', v:fmtE(totalCosts), c:'var(--red)', s:'transaction fees'},
+  ].map(function(m){
+    return '<div class="card" style="position:relative;overflow:hidden">'+
+      '<div class="metric-lbl">'+m.l+'</div>'+
+      '<div class="metric-val" style="color:'+m.c+'">'+m.v+'</div>'+
+      '<div class="metric-sub">'+m.s+'</div>'+
+    '</div>';
+  }).join('');
+
+  // ── 1. Realized P&L per closed position ──
+  var pnlRows = cp.slice().sort(function(a,b){return b.netPnL-a.netPnL;}).map(function(p){
+    var badge = p.openAction==='SELL'?
+      '<span style="color:var(--red);font-weight:700;font-size:10px">SHORT</span>':
+      '<span style="color:var(--accent);font-weight:700;font-size:10px">LONG</span>';
+    var remainOpen = p.netQty !== 0 ?
+      '<span style="color:var(--yellow);font-size:10px"> ('+Math.abs(p.netQty)+'x still open)</span>' : '';
+    return '<tr>'+
+      '<td style="font-size:11px;color:var(--muted)">'+p.openDate+'</td>'+
+      '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
+      '<td>'+badge+'</td>'+
+      '<td style="font-size:11px">'+p.optType+' '+p.strike+'</td>'+
+      '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+      '<td>'+p.matchedQty+'x</td>'+
+      '<td>'+fmtE(p.openPrice)+'</td>'+
+      '<td>'+fmtE(p.closePrice)+'</td>'+
+      '<td class="'+pcClass(p.grossPnL)+'">'+fmtE(p.grossPnL)+'</td>'+
+      '<td style="color:var(--muted);font-size:11px">-'+fmtE(p.totalCosts)+'</td>'+
+      '<td class="'+pcClass(p.netPnL)+'" style="font-weight:700">'+fmtE(p.netPnL)+remainOpen+'</td>'+
+      '<td style="color:var(--muted);font-size:11px">'+p.daysHeld+'d</td>'+
+    '</tr>';
+  }).join('');
+
+  var pnlHtml = '<div class="card" style="margin-bottom:16px">'+
+    '<div style="font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:14px">1 -- Realized P&L per Closed Position</div>'+
+    '<div style="overflow-x:auto"><table class="tbl" style="font-size:11px">'+
+      '<thead><tr><th>OPENED</th><th>TICKER</th><th>DIR</th><th>OPTION</th><th>EXPIRY</th><th>QTY</th><th>ENTRY</th><th>EXIT</th><th>GROSS</th><th>COSTS</th><th>NET P&L</th><th>HELD</th></tr></thead>'+
+      '<tbody>'+pnlRows+'</tbody>'+
+    '</table></div>'+
+  '</div>';
+
+  // ── 3. Roll analysis ──
+  var rollRows = rolls.map(function(r){
+    var sellDesc = r.sells.map(function(t){return t.strike+' exp:'+t.expiry.slice(5)+' @'+t.koers;}).join(', ');
+    var buyDesc  = r.buys.map(function(t){ return t.strike+' exp:'+t.expiry.slice(5)+' @'+t.koers;}).join(', ');
+    var creditColor = r.netCredit>=0?'var(--accent)':'var(--red)';
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px">'+r.date+'</td>'+
+      '<td style="font-weight:700;color:var(--accent)">'+esc(r.ticker)+'</td>'+
+      '<td><span style="font-size:10px;background:var(--surface);padding:2px 7px;border-radius:4px">'+esc(r.rollType)+'</span></td>'+
+      '<td style="font-size:11px;color:var(--red)">SELL '+sellDesc+'</td>'+
+      '<td style="font-size:11px;color:var(--accent)">BUY '+buyDesc+'</td>'+
+      '<td style="font-weight:700;color:'+creditColor+'">'+fmtE(r.netCredit)+'/ctr</td>'+
+    '</tr>';
+  }).join('');
+
+  var rollHtml = '<div class="card" style="margin-bottom:16px">'+
+    '<div style="font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:4px">3 -- Roll & Adjustment Analysis</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:14px">Same-day trades on same ticker+option type = roll or spread adjustment detected</div>'+
+    (rolls.length?
+      '<div style="overflow-x:auto"><table class="tbl" style="font-size:11px">'+
+        '<thead><tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>SOLD / OPENED</th><th>BOUGHT / CLOSED</th><th>NET CREDIT</th></tr></thead>'+
+        '<tbody>'+rollRows+'</tbody>'+
+      '</table></div>':
+      '<div style="color:var(--muted);font-size:12px;padding:16px 0">No rolls detected in transaction history</div>')+
+  '</div>';
+
+  // ── 4. Strike distance (spread width as OTM proxy) ──
+  // For each day with both a short and long of same ticker+optType, show the spread width
+  var spreadRows = rolls.filter(function(r){
+    return r.sells.length>0 && r.buys.length>0 && r.sells[0].expiry===r.buys[0].expiry;
+  }).map(function(r){
+    var shortStrike = r.sells[0].strike;
+    var longStrike  = r.buys[0].strike;
+    var width = Math.abs(shortStrike - longStrike);
+    var maxRisk = width * MULTIPLIER;
+    var netCredit = r.netCredit;
+    var creditPct = width>0 ? (netCredit/width*100) : 0;
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px">'+r.date+'</td>'+
+      '<td style="font-weight:700;color:var(--accent)">'+esc(r.ticker)+' '+r.optType+'</td>'+
+      '<td>'+r.sells[0].expiry+'</td>'+
+      '<td style="color:var(--red);font-weight:600">'+shortStrike+'</td>'+
+      '<td style="color:var(--accent);font-weight:600">'+longStrike+'</td>'+
+      '<td style="font-weight:600">'+width+'</td>'+
+      '<td>'+fmtE(maxRisk)+'</td>'+
+      '<td style="color:'+(netCredit>=0?'var(--accent)':'var(--red)')+';font-weight:600">'+fmtE(netCredit)+'</td>'+
+      '<td style="color:var(--muted);font-size:11px">'+Math.round(creditPct)+'% of width</td>'+
+    '</tr>';
+  }).join('');
+
+  // Also show all short strikes entered
+  var shortEntries = cp.filter(function(p){return p.openAction==='SELL';})
+    .sort(function(a,b){return b.openDate.localeCompare(a.openDate);})
+    .map(function(p){
+      return '<tr>'+
+        '<td style="color:var(--muted);font-size:11px">'+p.openDate+'</td>'+
+        '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
+        '<td>'+p.optType+'</td>'+
+        '<td style="font-weight:600">'+p.strike+'</td>'+
+        '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+        '<td>'+p.matchedQty+'x</td>'+
+        '<td style="font-weight:600">'+fmtE(p.openPrice)+'</td>'+
+        '<td class="'+pcClass(p.netPnL)+'">'+fmtE(p.netPnL)+'</td>'+
+      '</tr>';
+    }).join('');
+
+  var strikeHtml = '<div class="card" style="margin-bottom:16px">'+
+    '<div style="font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:4px">4 -- Short Strike Entries</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:14px">All short positions opened -- strike, entry premium, and outcome</div>'+
+    (shortEntries?
+      '<div style="overflow-x:auto"><table class="tbl" style="font-size:11px">'+
+        '<thead><tr><th>OPENED</th><th>TICKER</th><th>TYPE</th><th>SHORT STRIKE</th><th>EXPIRY</th><th>QTY</th><th>PREMIUM SOLD</th><th>NET P&L</th></tr></thead>'+
+        '<tbody>'+shortEntries+'</tbody>'+
+      '</table></div>':
+      '<div style="color:var(--muted);font-size:12px;padding:16px 0">No closed short positions found</div>')+
+  '</div>';
+
+  // ── 8. Premium decay capture ──
+  var decayRows = cp.filter(function(p){return p.captureRate!=null;})
+    .sort(function(a,b){return b.captureRate-a.captureRate;})
+    .map(function(p){
+      var barW = Math.max(0,Math.min(100,p.captureRate));
+      var barColor = p.captureRate>=50?'var(--accent)':p.captureRate>=0?'var(--yellow)':'var(--red)';
+      return '<tr>'+
+        '<td style="color:var(--muted);font-size:11px">'+p.openDate+'</td>'+
+        '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
+        '<td style="font-size:11px">'+p.optType+' '+p.strike+'</td>'+
+        '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+        '<td>'+p.matchedQty+'x</td>'+
+        '<td style="font-weight:600">'+fmtE(p.openPrice)+'</td>'+
+        '<td style="font-weight:600">'+fmtE(p.closePrice)+'</td>'+
+        '<td>'+
+          '<div style="display:flex;align-items:center;gap:8px">'+
+            '<div style="flex:1;height:6px;background:var(--border);border-radius:3px;min-width:60px">'+
+              '<div style="width:'+barW+'%;height:100%;background:'+barColor+';border-radius:3px"></div>'+
+            '</div>'+
+            '<span style="font-weight:700;color:'+barColor+';min-width:40px">'+Math.round(p.captureRate)+'%</span>'+
+          '</div>'+
+        '</td>'+
+        '<td class="'+pcClass(p.netPnL)+'">'+fmtE(p.netPnL)+'</td>'+
+        '<td style="color:var(--muted);font-size:11px">'+p.daysHeld+'d</td>'+
+      '</tr>';
+    }).join('');
+
+  var decayHtml = '<div class="card" style="margin-bottom:16px">'+
+    '<div style="font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:4px">8 -- Premium Decay Capture Rate</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:14px">For short positions: % of premium collected that you kept (sold price - close price) / sold price</div>'+
+    (decayRows?
+      '<div style="overflow-x:auto"><table class="tbl" style="font-size:11px">'+
+        '<thead><tr><th>OPENED</th><th>TICKER</th><th>OPTION</th><th>EXPIRY</th><th>QTY</th><th>SOLD AT</th><th>CLOSED AT</th><th>CAPTURE RATE</th><th>NET P&L</th><th>HELD</th></tr></thead>'+
+        '<tbody>'+decayRows+'</tbody>'+
+      '</table></div>':
+      '<div style="color:var(--muted);font-size:12px;padding:16px 0">No closed short positions found</div>')+
+  '</div>';
+
+  return '<div class="section-title">Analytics</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:20px">Based on '+txns.length+' transactions in history · '+cp.length+' closed positions analyzed</div>'+
+    '<div class="metric-grid" style="margin-bottom:16px">'+summaryHtml+'</div>'+
+    pnlHtml+
+    rollHtml+
+    strikeHtml+
+    decayHtml;
 }
 
 // --- Market Data --------------------------------------------------------------
