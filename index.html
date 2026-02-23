@@ -1568,35 +1568,33 @@ function loadVdax(){
   }
   state.vdaxLoading=true;
   state.vdaxError=null;
-  var period1=Math.floor(Date.now()/1000)-2*365*86400;
-  var period2=Math.floor(Date.now()/1000);
-  // Try query1 first, fall back to query2 if CORS/auth fails
-  var urls=[
-    'https://query1.finance.yahoo.com/v8/finance/chart/V1X.DE?interval=1d&period1='+period1+'&period2='+period2+'&events=history&corsDomain=finance.yahoo.com',
-    'https://query2.finance.yahoo.com/v8/finance/chart/V1X.DE?interval=1d&period1='+period1+'&period2='+period2+'&events=history'
-  ];
-  function tryFetch(idx){
-    if(idx>=urls.length){ throw new Error('All Yahoo Finance endpoints failed'); }
-    return fetch(urls[idx]).then(function(r){
-      if(!r.ok) return tryFetch(idx+1);
-      return r.json();
-    }).catch(function(){ return tryFetch(idx+1); });
-  }
-  tryFetch(0)
-    .then(function(json){
-      if(!json||!json.chart||!json.chart.result) throw new Error('Invalid VDAX response');
-      var result=json.chart.result[0];
-      var timestamps=result.timestamp;
-      var closes=result.indicators.quote[0].close;
-      var lookup={},vals=[];
-      for(var i=0;i<timestamps.length;i++){
-        var close=closes[i];
-        if(close==null) continue;
-        var d=new Date(timestamps[i]*1000);
-        var key=d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
-        lookup[key]=close; vals.push(close);
+  // Stooq CSV endpoint - CORS friendly, no API key needed
+  // Returns 2 years of daily data for V1X.DE (VDAX-NEW)
+  var url='https://stooq.com/q/d/l/?s=v1x.de&i=d';
+  fetch(url)
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.text();
+    })
+    .then(function(csv){
+      // Parse CSV: Date,Open,High,Low,Close,Volume
+      var lines=csv.trim().split('\n');
+      if(lines.length<2) throw new Error('Empty VDAX data');
+      var lookup={}, vals=[];
+      // Stooq returns newest first, skip header
+      for(var i=1;i<lines.length;i++){
+        var cols=lines[i].split(',');
+        if(cols.length<5) continue;
+        var date=cols[0].trim();   // YYYY-MM-DD
+        var close=parseFloat(cols[4]);
+        if(!date||isNaN(close)) continue;
+        // Only keep last 2 years
+        if(date < new Date(Date.now()-2*365*86400*1000).toISOString().slice(0,10)) continue;
+        lookup[date]=close;
+        vals.push(close);
       }
       var keys=Object.keys(lookup).sort();
+      if(!keys.length) throw new Error('No VDAX data parsed');
       var lastKey=keys[keys.length-1];
       state.vdax=lookup;
       state.vdaxLoading=false;
