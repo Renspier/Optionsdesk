@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OptionsDESK — Tests</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080a0d;--surface:#0f1117;--border:#1a1d26;
+  --accent:#00e5b4;--accentD:rgba(0,229,180,0.09);
+  --red:#ff4560;--redD:rgba(255,69,96,0.09);
+  --yellow:#fbbf24;--text:#e2e8f0;--muted:#5a6375;--dim:#2a2f3d;
+  --mono:ui-monospace,'Menlo','Consolas','Courier New',monospace;
+  --display:ui-rounded,'SF Pro Rounded','Trebuchet MS',system-ui,sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;min-height:100vh;padding:0 0 60px}
+header{border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;height:52px;background:var(--bg);gap:12px}
+.title{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:-.02em}
+.title span{color:var(--accent)}
+#app{max-width:900px;margin:0 auto;padding:28px 16px}
+.summary{display:flex;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.summary-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 20px;min-width:110px}
+.summary-num{font-family:var(--display);font-size:26px;font-weight:800;margin-bottom:2px}
+.summary-lbl{font-size:10px;letter-spacing:.1em;color:var(--muted)}
+.suite{margin-bottom:28px}
+.suite-name{font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:-.01em;margin-bottom:10px;color:var(--muted);border-left:3px solid var(--border);padding-left:10px}
+.suite-name.has-fail{border-color:var(--red);color:var(--red)}
+.suite-name.all-pass{border-color:var(--accent);color:var(--accent)}
+.test-row{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.test-row:last-child{border-bottom:none}
+.badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;margin-top:1px}
+.badge-pass{background:var(--accentD);color:var(--accent)}
+.badge-fail{background:var(--redD);color:var(--red)}
+.test-name{flex:1;line-height:1.5}
+.test-err{font-size:11px;color:var(--red);margin-top:3px;opacity:.85}
+.progress-bar{height:4px;border-radius:2px;background:var(--dim);overflow:hidden;margin-bottom:28px}
+.progress-fill{height:100%;border-radius:2px;transition:width .4s ease;background:var(--accent)}
+.progress-fill.has-fail{background:var(--red)}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="width:7px;height:7px;border-radius:50%;background:var(--accent)"></div>
+  <div class="title">OPTIONS<span>DESK</span> &mdash; Test Suite</div>
+</header>
+
+<div id="app">
+  <div id="results"></div>
+</div>
+
+<script>
+// ============================================================
+// Source under test — copied verbatim from index.html
+// (only pure functions that have no DOM or network dependencies)
+// ============================================================
+
+var fmt = function(n,d){
+  d = d===undefined?2:d;
+  if(n==null) return '--';
+  return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+};
+var fmtE = function(n){
+  if(n==null) return '--';
+  return (n>=0?'+':'-')+'€'+fmt(Math.abs(n));
+};
+var fmtPct = function(n){
+  if(n==null) return '--';
+  return (n>=0?'+':'')+fmt(n)+'%';
+};
+var pcClass = function(n){ return n>=0?'pos-green':'pos-red'; };
+var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+
+var MULTIPLIER = 5;
+
+function calcPnL(pos){
+  var totalPnL=0;
+  var entryNet=0;
+  for(var i=0;i<pos.legs.length;i++){
+    var l=pos.legs[i];
+    var curr=l.currentPremium!=null?l.currentPremium:l.entryPremium;
+    var s=l.action==='BUY'?1:-1;
+    var netContracts=l.netContracts!=null?l.netContracts:(l.qty!=null?l.qty:pos.contracts);
+    var legPnL=s*(curr-l.entryPremium)*netContracts*MULTIPLIER;
+    totalPnL+=legPnL;
+    entryNet+=(l.action==='SELL'?1:-1)*l.entryPremium*netContracts*MULTIPLIER;
+  }
+  var maxRisk=Math.abs(entryNet)||1;
+  return{entryNet:entryNet,totalPnL:totalPnL,pct:totalPnL/maxRisk*100};
+}
+
+var MONTH_MAP={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12',mrt:'03',mei:'05',okt:'10'};
+
+function parseOptionName(name){
+  var m=name.match(/^([A-Za-z]+)\s+([cpCP])\s*(\d+(?:[.,]\d+)?)\s+(\d{1,2})([a-zA-Z]{3})(\d{2,4})\s*$/);
+  if(!m) return null;
+  var ticker=m[1].toUpperCase();
+  var optType=m[2].toLowerCase()==='c'?'CALL':'PUT';
+  var strike=parseFloat(m[3].replace(',','.'));
+  var day=m[4];
+  var mon=m[5].toLowerCase().slice(0,3);
+  var yr=m[6];
+  var monthNum=MONTH_MAP[mon];
+  if(!monthNum) return null;
+  var year=yr.length===2?'20'+yr:yr;
+  var expiry=year+'-'+monthNum+'-'+(day.length===1?'0'+day:day);
+  return{ticker:ticker,optType:optType,strike:strike,expiry:expiry};
+}
+
+function parseCsvLine(line,sep){
+  var r=[],cur='',inQ=false;
+  for(var i=0;i<line.length;i++){
+    var ch=line[i];
+    if(ch==='"'){inQ=!inQ;continue;}
+    if(ch===sep&&!inQ){r.push(cur.trim());cur='';continue;}
+    cur+=ch;
+  }
+  r.push(cur.trim());
+  return r;
+}
+
+function parseNum(s){
+  if(!s) return null;
+  var c=s.replace(/\./g,'').replace(',','.');
+  var n=parseFloat(c);
+  return isNaN(n)?null:n;
+}
+
+function parseDeGiroCSV(text){
+  var lines=text.trim().split('\n').map(function(l){return l.replace(/\r/g,'');});
+  if(lines.length<2) throw new Error('CSV appears empty');
+  var sep=lines[0].indexOf(';')>=0?';':',';
+  var rawH=parseCsvLine(lines[0],sep);
+  var headers=rawH.map(function(h){return h.toLowerCase().trim();});
+
+  function col(){
+    for(var k=0;k<arguments.length;k++){
+      var key=arguments[k];
+      for(var i=0;i<headers.length;i++){
+        if(headers[i].indexOf(key)>=0) return i;
+      }
+    }
+    return -1;
+  }
+
+  var iProduct=col('product');
+  var iQty=col('aantal','quantity','hoeveelheid');
+  var iSlot=col('slotkoers','closeprice','close','current','last');
+  var iAank=col('aankoopkoers','openingskoers','gemiddelde','avg','entry','purchase');
+  var iDatum=col('datum','date');
+  var iCurr=col('valuta','currency');
+
+  var result=[];
+  var vals=[];
+  function gTxn(idx){return idx>=0?(vals[idx]||'').trim():'';}
+  for(var i=1;i<lines.length;i++){
+    var line=lines[i];
+    if(!line.trim()) continue;
+    vals=parseCsvLine(line,sep);
+    var g=gTxn;
+    var product=g(iProduct);
+    if(!product) continue;
+    var qty=parseNum(g(iQty))||0;
+    var slotkoers=parseNum(g(iSlot));
+    var aankoopkoers=parseNum(g(iAank));
+    var date=g(iDatum);
+    var currency=g(iCurr)||'EUR';
+    var optInfo=parseOptionName(product);
+    var isOption=optInfo!==null;
+    result.push({
+      id:'dg_'+i, date:date, product:product, currency:currency,
+      qty:qty, absQty:Math.abs(qty),
+      action:qty<0?'SELL':'BUY',
+      entryPrice:aankoopkoers, currentPrice:slotkoers,
+      isOption:isOption,
+      ticker:optInfo?optInfo.ticker:product.split(' ')[0].toUpperCase(),
+      optType:optInfo?optInfo.optType:'',
+      strike:optInfo?optInfo.strike:null,
+      expiry:optInfo?optInfo.expiry:''
+    });
+  }
+  return result;
+}
+
+function groupIntoPositions(txns){
+  var optTxns=txns.filter(function(t){return t.isOption;});
+  var groups={};
+  for(var i=0;i<optTxns.length;i++){
+    var t=optTxns[i];
+    var key=t.ticker+'_'+t.expiry;
+    if(!groups[key]) groups[key]=[];
+    groups[key].push(t);
+  }
+  var positions=[];
+  var keys=Object.keys(groups);
+  for(var k=0;k<keys.length;k++){
+    var list=groups[keys[k]];
+    var hasCalls=list.some(function(t){return t.optType==='CALL';});
+    var hasPuts=list.some(function(t){return t.optType==='PUT';});
+    var strikes={};list.forEach(function(t){if(t.strike!=null)strikes[t.strike]=1;});
+    var hasMulti=Object.keys(strikes).length>1;
+    var hasBoth=list.some(function(t){return t.action==='BUY';})&&list.some(function(t){return t.action==='SELL';});
+    var type='Option';
+    if(hasCalls&&hasPuts&&hasBoth) type='Iron Condor';
+    else if(hasCalls&&hasPuts) type='Straddle';
+    else if(hasCalls&&hasMulti&&hasBoth) type='Bull Call Spread';
+    else if(hasPuts&&hasMulti&&hasBoth) type='Bear Put Spread';
+    else if(hasCalls&&list[0].action==='BUY') type='Long Call';
+    else if(hasCalls) type='Short Call';
+    else if(hasPuts&&list[0].action==='BUY') type='Long Put';
+    else if(hasPuts) type='Short Put';
+    positions.push({
+      id:Date.now()+Math.random(),
+      ticker:list[0].ticker, type:type,
+      contracts:Math.max.apply(null,list.map(function(t){return t.absQty||1;})),
+      status:'Open', openDate:list[0].date||new Date().toISOString().split('T')[0],
+      notes:'Imported from DeGiro', source:'degiro',
+      legs:list.map(function(t){return{
+        action:t.action, optType:t.optType||'CALL',
+        strike:t.strike||0, expiry:t.expiry,
+        entryPremium:t.entryPrice!=null?t.entryPrice:(t.currentPrice||0),
+        currentPremium:t.currentPrice!=null?t.currentPrice:(t.entryPrice||0),
+        qty:t.absQty||null,
+        netContracts:t.absQty||null
+      };})
+    });
+  }
+  return{positions:positions,all:txns};
+}
+
+function parseDeGiroTransactions(text){
+  var lines=text.trim().split('\n').map(function(l){return l.replace(/\r/g,'');});
+  if(lines.length<2) throw new Error('CSV appears empty');
+  var sep=lines[0].indexOf(';')>=0?';':',';
+  var rawH=parseCsvLine(lines[0],sep);
+  var headers=rawH.map(function(h){return h.toLowerCase().trim();});
+
+  function col(){
+    for(var k=0;k<arguments.length;k++){
+      var key=arguments[k];
+      for(var i=0;i<headers.length;i++){
+        if(headers[i].indexOf(key)>=0) return i;
+      }
+    }
+    return -1;
+  }
+
+  var iDatum   = col('datum','date');
+  var iProduct = col('product');
+  var iAantal  = col('aantal','quantity','qty');
+  var iKoers   = col('koers','price');
+  var iWaarde  = col('lokale waarde','lokalewaarde','local value','waarde','value','totaal','total');
+  var iCosts   = col('transactiekosten','costs','kosten','commissie');
+
+  var result=[];
+  var vals=[];
+  function gCsv(idx){return idx>=0?(vals[idx]||'').trim():'';}
+  for(var i=1;i<lines.length;i++){
+    var line=lines[i];
+    if(!line.trim()) continue;
+    vals=parseCsvLine(line,sep);
+    var g=gCsv;
+
+    var product=g(iProduct);
+    if(!product) continue;
+
+    var dateStr=g(iDatum);
+    var qty=parseNum(g(iAantal))||0;
+    var koers=parseNum(g(iKoers));
+    var waarde=parseNum(g(iWaarde));
+    var costs=parseNum(g(iCosts));
+    var currency='EUR';
+
+    for(var j=0;j<vals.length;j++){
+      if(/^[A-Z]{3}$/.test((vals[j]||'').trim())){
+        currency=(vals[j]||'EUR').trim();
+        break;
+      }
+    }
+
+    var optInfo=parseOptionName(product);
+    var isOption=optInfo!==null;
+
+    result.push({
+      id:'txn_'+i,
+      date:dateStr,
+      product:product,
+      qty:qty,
+      absQty:Math.abs(qty),
+      action:qty<0?'SELL':'BUY',
+      koers:koers,
+      waarde:waarde,
+      costs:costs||0,
+      currency:currency,
+      isOption:isOption,
+      ticker:optInfo?optInfo.ticker:product.split(' ')[0].toUpperCase(),
+      optType:optInfo?optInfo.optType:'',
+      strike:optInfo?optInfo.strike:null,
+      expiry:optInfo?optInfo.expiry:'',
+      productKey:product.toLowerCase().trim()
+    });
+  }
+  return result;
+}
+
+function enrichLegsWithTransactions(positions, txns){
+  var optTxns=txns.filter(function(t){return t.isOption&&t.koers!=null;});
+
+  positions.forEach(function(pos){
+    pos.legs.forEach(function(leg){
+      var matches=optTxns.filter(function(t){
+        return t.ticker===pos.ticker &&
+               t.optType===leg.optType &&
+               t.strike===leg.strike &&
+               t.expiry===leg.expiry;
+      });
+
+      if(matches.length>0){
+        var buys=matches.filter(function(t){return t.action==='BUY';});
+        var sells=matches.filter(function(t){return t.action==='SELL';});
+        var totalBuyQty=buys.reduce(function(s,t){return s+t.absQty;},0);
+        var totalSellQty=sells.reduce(function(s,t){return s+t.absQty;},0);
+
+        var netQty=Math.abs(totalBuyQty-totalSellQty);
+        if(netQty===0) netQty=Math.max(totalBuyQty,totalSellQty);
+        leg.netContracts=netQty;
+
+        var openingTrades=leg.action==='BUY'?buys:sells;
+        if(openingTrades.length>0){
+          var totalQty=openingTrades.reduce(function(s,t){return s+t.absQty;},0);
+          var totalVal=openingTrades.reduce(function(s,t){return s+t.koers*t.absQty;},0);
+          var vwap=totalQty>0?totalVal/totalQty:null;
+          if(vwap!=null){
+            leg.entryPremium=Math.round(vwap*100)/100;
+            leg.txnMatched=true;
+          }
+        }
+
+        leg.transactions=matches.map(function(t){
+          return{date:t.date,action:t.action,qty:t.absQty,price:t.koers,costs:t.costs};
+        });
+      }
+    });
+
+    var matchedLegs=pos.legs.filter(function(l){return l.netContracts!=null;});
+    if(matchedLegs.length>0){
+      pos.contracts=Math.max.apply(null,matchedLegs.map(function(l){return l.netContracts;}));
+      pos.txnMatched=true;
+    }
+  });
+
+  return positions;
+}
+
+// ============================================================
+// Minimal test runner
+// ============================================================
+
+var _suites = [];
+var _currentSuite = null;
+var _totalPass = 0;
+var _totalFail = 0;
+
+function describe(name, fn) {
+  _currentSuite = {name: name, tests: []};
+  _suites.push(_currentSuite);
+  try { fn(); } catch(e) { /* suite-level error already captured below */ }
+}
+
+function test(name, fn) {
+  var entry = {name: name, status: 'PASS', error: null};
+  try {
+    fn();
+    _totalPass++;
+  } catch(e) {
+    entry.status = 'FAIL';
+    entry.error = e.message;
+    _totalFail++;
+  }
+  if(_currentSuite) _currentSuite.tests.push(entry);
+}
+
+function expect(actual) {
+  return {
+    toBe: function(expected) {
+      if(actual !== expected) {
+        throw new Error('Expected ' + JSON.stringify(expected) + ', got ' + JSON.stringify(actual));
+      }
+    },
+    toEqual: function(expected) {
+      var a = JSON.stringify(actual);
+      var b = JSON.stringify(expected);
+      if(a !== b) {
+        throw new Error('Expected ' + b + ', got ' + a);
+      }
+    },
+    toBeNull: function() {
+      if(actual !== null) {
+        throw new Error('Expected null, got ' + JSON.stringify(actual));
+      }
+    },
+    toBeCloseTo: function(expected, digits) {
+      var d = digits !== undefined ? digits : 2;
+      if(Math.abs(actual - expected) >= Math.pow(10, -d) / 2) {
+        throw new Error('Expected ~' + expected + ', got ' + actual);
+      }
+    },
+    toThrow: function() {
+      // actual should be a function
+      var threw = false;
+      try { actual(); } catch(e) { threw = true; }
+      if(!threw) throw new Error('Expected function to throw but it did not');
+    }
+  };
+}
+
+// ============================================================
+// Tests
+// ============================================================
+
+// --- fmt ----------------------------------------------------------------------
+describe('fmt', function() {
+  test('returns -- for null', function() {
+    expect(fmt(null)).toBe('--');
+  });
+  test('returns -- for undefined', function() {
+    expect(fmt(undefined)).toBe('--');
+  });
+  test('formats integer with 2 decimal places by default', function() {
+    expect(fmt(0)).toBe('0.00');
+  });
+  test('formats positive decimal', function() {
+    expect(fmt(1234.5)).toBe('1,234.50');
+  });
+  test('formats negative number', function() {
+    expect(fmt(-500)).toBe('-500.00');
+  });
+  test('respects custom decimal places', function() {
+    expect(fmt(1234.567, 0)).toBe('1,235');
+  });
+  test('formats zero decimal places', function() {
+    expect(fmt(42, 0)).toBe('42');
+  });
+  test('formats large number with thousand separator', function() {
+    expect(fmt(1000000, 0)).toBe('1,000,000');
+  });
+});
+
+// --- fmtE ---------------------------------------------------------------------
+describe('fmtE', function() {
+  test('returns -- for null', function() {
+    expect(fmtE(null)).toBe('--');
+  });
+  test('prefixes positive value with +€', function() {
+    expect(fmtE(100)).toBe('+€100.00');
+  });
+  test('prefixes negative value with -€ (positive absolute)', function() {
+    expect(fmtE(-50)).toBe('-€50.00');
+  });
+  test('treats zero as positive', function() {
+    expect(fmtE(0)).toBe('+€0.00');
+  });
+  test('formats large positive correctly', function() {
+    expect(fmtE(2500)).toBe('+€2,500.00');
+  });
+});
+
+// --- fmtPct -------------------------------------------------------------------
+describe('fmtPct', function() {
+  test('returns -- for null', function() {
+    expect(fmtPct(null)).toBe('--');
+  });
+  test('prefixes positive with +', function() {
+    expect(fmtPct(5.5)).toBe('+5.50%');
+  });
+  test('negative has no extra prefix (sign from number)', function() {
+    expect(fmtPct(-3.2)).toBe('-3.20%');
+  });
+  test('zero treated as positive', function() {
+    expect(fmtPct(0)).toBe('+0.00%');
+  });
+});
+
+// --- pcClass ------------------------------------------------------------------
+describe('pcClass', function() {
+  test('positive number returns pos-green', function() {
+    expect(pcClass(10)).toBe('pos-green');
+  });
+  test('zero returns pos-green', function() {
+    expect(pcClass(0)).toBe('pos-green');
+  });
+  test('negative number returns pos-red', function() {
+    expect(pcClass(-1)).toBe('pos-red');
+  });
+  test('small negative returns pos-red', function() {
+    expect(pcClass(-0.01)).toBe('pos-red');
+  });
+});
+
+// --- esc ----------------------------------------------------------------------
+describe('esc', function() {
+  test('escapes ampersand', function() {
+    expect(esc('a&b')).toBe('a&amp;b');
+  });
+  test('escapes less-than', function() {
+    expect(esc('<script>')).toBe('&lt;script&gt;');
+  });
+  test('escapes greater-than', function() {
+    expect(esc('x>y')).toBe('x&gt;y');
+  });
+  test('escapes double quotes', function() {
+    expect(esc('"hello"')).toBe('&quot;hello&quot;');
+  });
+  test('handles null gracefully (returns empty string)', function() {
+    expect(esc(null)).toBe('');
+  });
+  test('handles undefined gracefully', function() {
+    expect(esc(undefined)).toBe('');
+  });
+  test('leaves plain text unchanged', function() {
+    expect(esc('hello world')).toBe('hello world');
+  });
+  test('escapes multiple occurrences', function() {
+    expect(esc('<a>&<b>')).toBe('&lt;a&gt;&amp;&lt;b&gt;');
+  });
+});
+
+// --- parseNum -----------------------------------------------------------------
+describe('parseNum', function() {
+  test('returns null for empty string', function() {
+    expect(parseNum('')).toBeNull();
+  });
+  test('returns null for null', function() {
+    expect(parseNum(null)).toBeNull();
+  });
+  test('parses European format (comma decimal, dot thousands)', function() {
+    expect(parseNum('1.234,56')).toBeCloseTo(1234.56, 2);
+  });
+  test('parses simple integer string', function() {
+    expect(parseNum('42')).toBe(42);
+  });
+  test('parses zero', function() {
+    expect(parseNum('0')).toBe(0);
+  });
+  test('parses negative European number', function() {
+    expect(parseNum('-2,50')).toBeCloseTo(-2.5, 2);
+  });
+  test('parses simple comma decimal', function() {
+    expect(parseNum('150,00')).toBeCloseTo(150, 2);
+  });
+  test('returns null for non-numeric string', function() {
+    expect(parseNum('abc')).toBeNull();
+  });
+});
+
+// --- parseCsvLine -------------------------------------------------------------
+describe('parseCsvLine', function() {
+  test('splits comma-separated values', function() {
+    expect(parseCsvLine('a,b,c', ',')).toEqual(['a','b','c']);
+  });
+  test('splits semicolon-separated values', function() {
+    expect(parseCsvLine('a;b;c', ';')).toEqual(['a','b','c']);
+  });
+  test('handles quoted field containing separator', function() {
+    expect(parseCsvLine('"hello, world",b', ',')).toEqual(['hello, world','b']);
+  });
+  test('strips surrounding whitespace from fields', function() {
+    expect(parseCsvLine(' a , b ', ',')).toEqual(['a','b']);
+  });
+  test('handles empty fields', function() {
+    expect(parseCsvLine('a,,c', ',')).toEqual(['a','','c']);
+  });
+  test('single field with no separator', function() {
+    expect(parseCsvLine('hello', ',')).toEqual(['hello']);
+  });
+  test('handles quoted field with semicolons', function() {
+    expect(parseCsvLine('"a;b";c', ';')).toEqual(['a;b','c']);
+  });
+});
+
+// --- parseOptionName ----------------------------------------------------------
+describe('parseOptionName', function() {
+  test('parses call option with 2-digit year', function() {
+    var r = parseOptionName('ODAX C 19000.00 20feb26');
+    expect(r.ticker).toBe('ODAX');
+    expect(r.optType).toBe('CALL');
+    expect(r.strike).toBe(19000);
+    expect(r.expiry).toBe('2026-02-20');
+  });
+  test('parses put option lowercase p', function() {
+    var r = parseOptionName('ODAX p 19000.00 15mar26');
+    expect(r.optType).toBe('PUT');
+    expect(r.expiry).toBe('2026-03-15');
+  });
+  test('uses Dutch month alias mrt for March', function() {
+    var r = parseOptionName('OESX C 5000 20mrt26');
+    expect(r.expiry).toBe('2026-03-20');
+  });
+  test('uses Dutch month alias mei for May', function() {
+    var r = parseOptionName('ODAX C 18000 16mei26');
+    expect(r.expiry).toBe('2026-05-16');
+  });
+  test('uses Dutch month alias okt for October', function() {
+    var r = parseOptionName('ODAX P 20000 17okt25');
+    expect(r.expiry).toBe('2025-10-17');
+  });
+  test('pads single-digit day with leading zero', function() {
+    var r = parseOptionName('ODAX C 19000 5jan26');
+    expect(r.expiry).toBe('2026-01-05');
+  });
+  test('handles 4-digit year', function() {
+    var r = parseOptionName('ODAX C 19000 20feb2027');
+    expect(r.expiry).toBe('2027-02-20');
+  });
+  test('returns null for garbage input', function() {
+    expect(parseOptionName('not an option')).toBeNull();
+  });
+  test('returns null for unknown month abbreviation', function() {
+    expect(parseOptionName('ODAX C 19000 20xyz26')).toBeNull();
+  });
+  test('parses strike with comma decimal', function() {
+    var r = parseOptionName('ODAX C 19000,50 20feb26');
+    expect(r.strike).toBeCloseTo(19000.5, 2);
+  });
+  test('uppercases ticker', function() {
+    var r = parseOptionName('odax C 19000 20feb26');
+    expect(r.ticker).toBe('ODAX');
+  });
+  test('uppercase C is recognised as CALL', function() {
+    var r = parseOptionName('ODAX C 19000 20feb26');
+    expect(r.optType).toBe('CALL');
+  });
+});
+
+// --- calcPnL ------------------------------------------------------------------
+describe('calcPnL', function() {
+  test('BUY leg gains when current > entry', function() {
+    var pos = {
+      contracts: 1,
+      legs: [{action:'BUY', entryPremium:100, currentPremium:150, netContracts:1}]
+    };
+    var r = calcPnL(pos);
+    // sign=1, (150-100)*1*5 = 250
+    expect(r.totalPnL).toBe(250);
+  });
+  test('BUY leg loses when current < entry', function() {
+    var pos = {
+      contracts: 1,
+      legs: [{action:'BUY', entryPremium:100, currentPremium:60, netContracts:1}]
+    };
+    var r = calcPnL(pos);
+    // 1*(60-100)*1*5 = -200
+    expect(r.totalPnL).toBe(-200);
+  });
+  test('SELL leg gains when current < entry', function() {
+    var pos = {
+      contracts: 1,
+      legs: [{action:'SELL', entryPremium:100, currentPremium:50, netContracts:1}]
+    };
+    var r = calcPnL(pos);
+    // sign=-1, -1*(50-100)*1*5 = 250
+    expect(r.totalPnL).toBe(250);
+  });
+  test('zero P&L when current equals entry', function() {
+    var pos = {
+      contracts: 1,
+      legs: [{action:'BUY', entryPremium:100, currentPremium:100, netContracts:1}]
+    };
+    expect(calcPnL(pos).totalPnL).toBe(0);
+  });
+  test('falls back to pos.contracts when netContracts absent', function() {
+    var pos = {
+      contracts: 2,
+      legs: [{action:'BUY', entryPremium:100, currentPremium:150}]
+    };
+    // 1*(150-100)*2*5 = 500
+    expect(calcPnL(pos).totalPnL).toBe(500);
+  });
+  test('falls back to leg.qty when netContracts absent but qty present', function() {
+    var pos = {
+      contracts: 99,
+      legs: [{action:'BUY', entryPremium:100, currentPremium:150, qty:3}]
+    };
+    // 1*(150-100)*3*5 = 750
+    expect(calcPnL(pos).totalPnL).toBe(750);
+  });
+  test('uses entryPremium for current when currentPremium is null', function() {
+    var pos = {
+      contracts: 1,
+      legs: [{action:'BUY', entryPremium:100, currentPremium:null, netContracts:1}]
+    };
+    // curr = entryPremium = 100, pnl = 0
+    expect(calcPnL(pos).totalPnL).toBe(0);
+  });
+  test('bull call spread: combined P&L of buy and sell legs', function() {
+    // BUY call: entry=200, current=300 → +500
+    // SELL call: entry=150, current=50 → +500
+    var pos = {
+      contracts: 1,
+      legs: [
+        {action:'BUY',  entryPremium:200, currentPremium:300, netContracts:1},
+        {action:'SELL', entryPremium:150, currentPremium:50,  netContracts:1}
+      ]
+    };
+    expect(calcPnL(pos).totalPnL).toBe(1000);
+  });
+  test('pct calculation', function() {
+    // BUY leg: entry=100, current=150, contracts=1
+    // entryNet = -1*100*1*5 = -500, maxRisk=500
+    // pnl=250, pct=250/500*100=50
+    var pos = {
+      contracts: 1,
+      legs: [{action:'BUY', entryPremium:100, currentPremium:150, netContracts:1}]
+    };
+    expect(calcPnL(pos).pct).toBeCloseTo(50, 4);
+  });
+  test('entryNet is negative for net-debit (buy-heavy) position', function() {
+    var pos = {
+      contracts: 1,
+      legs: [{action:'BUY', entryPremium:200, currentPremium:200, netContracts:1}]
+    };
+    // entryNet = -1*200*1*5 = -1000
+    expect(calcPnL(pos).entryNet).toBe(-1000);
+  });
+});
+
+// --- parseDeGiroCSV -----------------------------------------------------------
+describe('parseDeGiroCSV', function() {
+  var DUTCH_CSV = [
+    'Product;Aantal;Slotkoers;Aankoopkoers;Datum;Valuta',
+    'ODAX C 19000.00 20feb26;1;150,00;120,00;20-01-2026;EUR',
+    'ODAX P 18000.00 20feb26;-2;80,00;90,00;20-01-2026;EUR'
+  ].join('\n');
+
+  var ENGLISH_CSV = [
+    'Product,Quantity,Close,Entry,Date,Currency',
+    'OESX C 5000.00 20mar26,1,200,180,2026-01-15,EUR'
+  ].join('\n');
+
+  test('detects semicolon separator from Dutch CSV', function() {
+    var rows = parseDeGiroCSV(DUTCH_CSV);
+    expect(rows.length).toBe(2);
+  });
+  test('first row: parses call option from Dutch CSV', function() {
+    var row = parseDeGiroCSV(DUTCH_CSV)[0];
+    expect(row.ticker).toBe('ODAX');
+    expect(row.optType).toBe('CALL');
+    expect(row.strike).toBe(19000);
+    expect(row.expiry).toBe('2026-02-20');
+    expect(row.isOption).toBe(true);
+  });
+  test('first row: parses entry and current prices (European format)', function() {
+    var row = parseDeGiroCSV(DUTCH_CSV)[0];
+    expect(row.entryPrice).toBeCloseTo(120, 2);
+    expect(row.currentPrice).toBeCloseTo(150, 2);
+  });
+  test('first row: BUY direction for positive qty', function() {
+    var row = parseDeGiroCSV(DUTCH_CSV)[0];
+    expect(row.action).toBe('BUY');
+    expect(row.qty).toBe(1);
+  });
+  test('second row: SELL direction for negative qty', function() {
+    var row = parseDeGiroCSV(DUTCH_CSV)[1];
+    expect(row.action).toBe('SELL');
+    expect(row.absQty).toBe(2);
+  });
+  test('detects comma separator from English CSV', function() {
+    var rows = parseDeGiroCSV(ENGLISH_CSV);
+    expect(rows.length).toBe(1);
+    expect(rows[0].ticker).toBe('OESX');
+  });
+  test('throws on CSV with fewer than 2 lines', function() {
+    expect(function(){ parseDeGiroCSV('Product\n'); }).toThrow();
+  });
+  test('skips blank lines', function() {
+    var csv = 'Product;Aantal;Slotkoers;Aankoopkoers;Datum;Valuta\n\nODAX C 19000.00 20feb26;1;150,00;120,00;20-01-2026;EUR\n';
+    var rows = parseDeGiroCSV(csv);
+    expect(rows.length).toBe(1);
+  });
+  test('non-option row is flagged as not an option', function() {
+    var csv = 'Product;Aantal;Slotkoers;Aankoopkoers;Datum;Valuta\nAAPL;10;150,00;140,00;20-01-2026;USD\n';
+    var row = parseDeGiroCSV(csv)[0];
+    expect(row.isOption).toBe(false);
+    expect(row.ticker).toBe('AAPL');
+  });
+});
+
+// --- parseDeGiroTransactions --------------------------------------------------
+describe('parseDeGiroTransactions', function() {
+  var TXN_CSV = [
+    'Datum;Tijd;Product;ISIN;Beurs;Aantal;Koers;Lokale waarde;Valuta;Transactiekosten',
+    '20-01-2026;09:05;ODAX C 19000.00 20feb26;DE000A0S5MC7;DTB;2;120,00;240,00;EUR;-2,50',
+    '20-01-2026;10:10;ODAX P 18500.00 20feb26;DE000A0S5MC8;DTB;-1;85,00;-85,00;EUR;-1,50'
+  ].join('\n');
+
+  test('parses both rows', function() {
+    var rows = parseDeGiroTransactions(TXN_CSV);
+    expect(rows.length).toBe(2);
+  });
+  test('first row: product parsed as option', function() {
+    var row = parseDeGiroTransactions(TXN_CSV)[0];
+    expect(row.isOption).toBe(true);
+    expect(row.ticker).toBe('ODAX');
+    expect(row.optType).toBe('CALL');
+    expect(row.strike).toBe(19000);
+    expect(row.expiry).toBe('2026-02-20');
+  });
+  test('first row: koers (trade price per unit) parsed correctly', function() {
+    var row = parseDeGiroTransactions(TXN_CSV)[0];
+    expect(row.koers).toBeCloseTo(120, 2);
+  });
+  test('first row: BUY direction for positive quantity', function() {
+    var row = parseDeGiroTransactions(TXN_CSV)[0];
+    expect(row.action).toBe('BUY');
+    expect(row.absQty).toBe(2);
+  });
+  test('second row: SELL direction for negative quantity', function() {
+    var row = parseDeGiroTransactions(TXN_CSV)[1];
+    expect(row.action).toBe('SELL');
+    expect(row.absQty).toBe(1);
+  });
+  test('costs parsed correctly (European decimal)', function() {
+    var row = parseDeGiroTransactions(TXN_CSV)[0];
+    expect(row.costs).toBeCloseTo(-2.5, 2);
+  });
+  test('currency detected from 3-letter value in row', function() {
+    var row = parseDeGiroTransactions(TXN_CSV)[0];
+    expect(row.currency).toBe('EUR');
+  });
+  test('productKey is lowercased product name', function() {
+    var row = parseDeGiroTransactions(TXN_CSV)[0];
+    expect(row.productKey).toBe('odax c 19000.00 20feb26');
+  });
+  test('throws on CSV with fewer than 2 lines', function() {
+    expect(function(){ parseDeGiroTransactions('Datum\n'); }).toThrow();
+  });
+});
+
+// --- groupIntoPositions -------------------------------------------------------
+describe('groupIntoPositions', function() {
+  function makeTxn(opts) {
+    return {
+      isOption: true,
+      ticker: opts.ticker || 'ODAX',
+      optType: opts.optType || 'CALL',
+      strike: opts.strike || 19000,
+      expiry: opts.expiry || '2026-02-20',
+      action: opts.action || 'BUY',
+      absQty: opts.absQty || 1,
+      entryPrice: opts.entryPrice || 200,
+      currentPrice: opts.currentPrice || 200,
+      date: '20-01-2026'
+    };
+  }
+
+  test('detects Bull Call Spread from two calls with different strikes', function() {
+    var txns = [
+      makeTxn({strike:19000, action:'BUY'}),
+      makeTxn({strike:19500, action:'SELL'})
+    ];
+    var result = groupIntoPositions(txns);
+    expect(result.positions[0].type).toBe('Bull Call Spread');
+  });
+
+  test('detects Bear Put Spread from two puts with different strikes', function() {
+    var txns = [
+      makeTxn({optType:'PUT', strike:19000, action:'BUY'}),
+      makeTxn({optType:'PUT', strike:18500, action:'SELL'})
+    ];
+    var result = groupIntoPositions(txns);
+    expect(result.positions[0].type).toBe('Bear Put Spread');
+  });
+
+  test('detects Iron Condor from calls and puts with buys and sells', function() {
+    var txns = [
+      makeTxn({optType:'CALL', strike:19500, action:'SELL'}),
+      makeTxn({optType:'CALL', strike:20000, action:'BUY'}),
+      makeTxn({optType:'PUT',  strike:18500, action:'SELL'}),
+      makeTxn({optType:'PUT',  strike:18000, action:'BUY'})
+    ];
+    var result = groupIntoPositions(txns);
+    expect(result.positions[0].type).toBe('Iron Condor');
+  });
+
+  test('detects Long Call for single buy call', function() {
+    var txns = [makeTxn({action:'BUY', optType:'CALL'})];
+    var result = groupIntoPositions(txns);
+    expect(result.positions[0].type).toBe('Long Call');
+  });
+
+  test('detects Short Call for single sell call', function() {
+    var txns = [makeTxn({action:'SELL', optType:'CALL'})];
+    var result = groupIntoPositions(txns);
+    expect(result.positions[0].type).toBe('Short Call');
+  });
+
+  test('detects Long Put for single buy put', function() {
+    var txns = [makeTxn({action:'BUY', optType:'PUT'})];
+    var result = groupIntoPositions(txns);
+    expect(result.positions[0].type).toBe('Long Put');
+  });
+
+  test('detects Short Put for single sell put', function() {
+    var txns = [makeTxn({action:'SELL', optType:'PUT'})];
+    var result = groupIntoPositions(txns);
+    expect(result.positions[0].type).toBe('Short Put');
+  });
+
+  test('filters out non-option rows', function() {
+    var txns = [
+      {isOption:false, ticker:'AAPL', absQty:10},
+      makeTxn({action:'BUY'})
+    ];
+    var result = groupIntoPositions(txns);
+    expect(result.positions.length).toBe(1);
+  });
+
+  test('groups by ticker and expiry', function() {
+    var txns = [
+      makeTxn({expiry:'2026-02-20'}),
+      makeTxn({expiry:'2026-03-20'})
+    ];
+    var result = groupIntoPositions(txns);
+    expect(result.positions.length).toBe(2);
+  });
+
+  test('all input txns returned in .all property', function() {
+    var txns = [
+      makeTxn({}),
+      {isOption:false, ticker:'AAPL', absQty:10}
+    ];
+    var result = groupIntoPositions(txns);
+    expect(result.all.length).toBe(2);
+  });
+});
+
+// --- enrichLegsWithTransactions -----------------------------------------------
+describe('enrichLegsWithTransactions', function() {
+  function makePos(legOpts) {
+    return {
+      ticker: 'ODAX',
+      contracts: 1,
+      legs: [{
+        action: legOpts.action || 'BUY',
+        optType: legOpts.optType || 'CALL',
+        strike: legOpts.strike || 19000,
+        expiry: legOpts.expiry || '2026-02-20',
+        entryPremium: 0,
+        currentPremium: 150
+      }]
+    };
+  }
+
+  function makeTxn(opts) {
+    return {
+      isOption: true,
+      koers: opts.koers || 120,
+      ticker: opts.ticker || 'ODAX',
+      optType: opts.optType || 'CALL',
+      strike: opts.strike || 19000,
+      expiry: opts.expiry || '2026-02-20',
+      action: opts.action || 'BUY',
+      absQty: opts.absQty || 1,
+      costs: opts.costs || 0,
+      date: '2026-01-20'
+    };
+  }
+
+  test('sets entryPremium from VWAP of matched BUY transactions', function() {
+    var pos = makePos({});
+    var txns = [makeTxn({koers:120, absQty:1})];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].entryPremium).toBeCloseTo(120, 2);
+  });
+
+  test('sets netContracts from matched transactions', function() {
+    var pos = makePos({});
+    var txns = [makeTxn({absQty:3})];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].netContracts).toBe(3);
+  });
+
+  test('VWAP is weighted average when multiple transactions match', function() {
+    var pos = makePos({});
+    // Buy 1 at 100, buy 1 at 200 → VWAP = 150
+    var txns = [
+      makeTxn({koers:100, absQty:1}),
+      makeTxn({koers:200, absQty:1})
+    ];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].entryPremium).toBeCloseTo(150, 2);
+  });
+
+  test('netContracts is net (buys minus sells) when position is open', function() {
+    var pos = makePos({});
+    // Opened 3, closed 1 → net = 2
+    var txns = [
+      makeTxn({action:'BUY',  absQty:3}),
+      makeTxn({action:'SELL', absQty:1})
+    ];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].netContracts).toBe(2);
+  });
+
+  test('netContracts uses max side when fully closed (net=0)', function() {
+    var pos = makePos({});
+    // Opened 2, closed 2 → net=0, use max=2
+    var txns = [
+      makeTxn({action:'BUY',  absQty:2}),
+      makeTxn({action:'SELL', absQty:2})
+    ];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].netContracts).toBe(2);
+  });
+
+  test('does not match when ticker differs', function() {
+    var pos = makePos({});
+    var txns = [makeTxn({ticker:'OESX'})];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].netContracts != null).toBe(false);
+  });
+
+  test('leg.txnMatched flag is set after successful match', function() {
+    var pos = makePos({});
+    var txns = [makeTxn({})];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].txnMatched).toBe(true);
+  });
+
+  test('pos.contracts updated to max matched netContracts', function() {
+    var pos = makePos({});
+    var txns = [makeTxn({absQty:5})];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.contracts).toBe(5);
+  });
+
+  test('leg.transactions array attached with date, action, qty, price, costs', function() {
+    var pos = makePos({});
+    var txns = [makeTxn({koers:120, absQty:2, costs:-2.5, action:'BUY'})];
+    enrichLegsWithTransactions([pos], txns);
+    var legTxns = pos.legs[0].transactions;
+    expect(legTxns.length).toBe(1);
+    expect(legTxns[0].price).toBeCloseTo(120, 2);
+    expect(legTxns[0].qty).toBe(2);
+    expect(legTxns[0].costs).toBeCloseTo(-2.5, 2);
+  });
+
+  test('ignores transactions where koers is null', function() {
+    var pos = makePos({});
+    var txns = [makeTxn({koers:null})];
+    enrichLegsWithTransactions([pos], txns);
+    expect(pos.legs[0].netContracts != null).toBe(false);
+  });
+});
+
+// ============================================================
+// Render results
+// ============================================================
+
+window.addEventListener('DOMContentLoaded', function() {
+  var totalTests = _totalPass + _totalFail;
+  var passRate = totalTests ? Math.round(_totalPass / totalTests * 100) : 0;
+  var allPassed = _totalFail === 0;
+
+  var html = '';
+
+  // Progress bar
+  html += '<div class="progress-bar"><div class="progress-fill' + (allPassed ? '' : ' has-fail') + '" style="width:' + passRate + '%"></div></div>';
+
+  // Summary boxes
+  html += '<div class="summary">';
+  html += '<div class="summary-box"><div class="summary-num" style="color:' + (allPassed ? 'var(--accent)' : 'var(--text)') + '">' + totalTests + '</div><div class="summary-lbl">TOTAL</div></div>';
+  html += '<div class="summary-box"><div class="summary-num" style="color:var(--accent)">' + _totalPass + '</div><div class="summary-lbl">PASSED</div></div>';
+  html += '<div class="summary-box"><div class="summary-num" style="color:' + (_totalFail > 0 ? 'var(--red)' : 'var(--muted)') + '">' + _totalFail + '</div><div class="summary-lbl">FAILED</div></div>';
+  html += '<div class="summary-box"><div class="summary-num" style="color:var(--yellow)">' + passRate + '%</div><div class="summary-lbl">PASS RATE</div></div>';
+  html += '</div>';
+
+  // Suites
+  for(var s = 0; s < _suites.length; s++) {
+    var suite = _suites[s];
+    var suiteFail = suite.tests.filter(function(t){ return t.status === 'FAIL'; }).length;
+    var suiteClass = suiteFail > 0 ? 'has-fail' : 'all-pass';
+
+    html += '<div class="suite">';
+    html += '<div class="suite-name ' + suiteClass + '">' + suite.name + ' &nbsp;<span style="font-weight:400;font-family:var(--mono);font-size:11px">' + (suite.tests.length - suiteFail) + '/' + suite.tests.length + '</span></div>';
+
+    for(var t = 0; t < suite.tests.length; t++) {
+      var tst = suite.tests[t];
+      html += '<div class="test-row">';
+      html += '<span class="badge badge-' + (tst.status === 'PASS' ? 'pass' : 'fail') + '">' + tst.status + '</span>';
+      html += '<div class="test-name">' + tst.name;
+      if(tst.error) html += '<div class="test-err">&#x2192; ' + tst.error + '</div>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  document.getElementById('results').innerHTML = html;
+  document.title = (allPassed ? '✓' : '✗') + ' OptionsDESK Tests (' + _totalPass + '/' + totalTests + ')';
+});
+</script>
+</body>
+</html>

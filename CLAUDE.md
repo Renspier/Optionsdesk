@@ -297,6 +297,59 @@ There is no build step. To develop:
 
 ---
 
+## Test Suite
+
+A browser-based test suite lives in `tests.html`. It has zero external dependencies and requires no build step — open it directly in any modern browser.
+
+### Running the tests
+
+```
+# Option 1: open directly in the browser
+open tests.html          # macOS
+xdg-open tests.html      # Linux
+
+# Option 2: serve locally (avoids any file:// quirks)
+python3 -m http.server 8080
+# then navigate to http://localhost:8080/tests.html
+```
+
+### What is tested
+
+| Suite                          | Functions covered                             |
+|--------------------------------|-----------------------------------------------|
+| `fmt`                          | Number formatting, null/undefined handling    |
+| `fmtE`                         | Euro sign formatting                          |
+| `fmtPct`                       | Percentage sign formatting                    |
+| `pcClass`                      | CSS class selection by sign                   |
+| `esc`                          | HTML special-character escaping               |
+| `parseNum`                     | European number parsing (comma decimal)       |
+| `parseCsvLine`                 | CSV tokeniser, quoted fields, separators      |
+| `parseOptionName`              | DeGiro option name parser, Dutch month aliases|
+| `calcPnL`                      | P&L formula, BUY/SELL sign, multiplier, pct  |
+| `parseDeGiroCSV`               | Full portfolio CSV parse, Dutch & English     |
+| `parseDeGiroTransactions`      | Transaction history CSV parse                 |
+| `groupIntoPositions`           | Spread type detection from transaction list   |
+| `enrichLegsWithTransactions`   | VWAP entry price, net contracts, matching     |
+
+### Test runner implementation
+
+`tests.html` contains a minimal self-contained test runner (no Jest/Mocha):
+- `describe(name, fn)` — groups related tests
+- `test(name, fn)` — runs a single assertion block
+- `expect(actual).toBe/toEqual/toBeNull/toBeCloseTo/toThrow(expected)` — assertion helpers
+
+Results are rendered as a pass/fail summary with a progress bar. The browser tab title also reflects pass/fail state for quick glance.
+
+### Adding new tests
+
+1. Copy the pure function(s) you want to test from `index.html` into the "Source under test" block in `tests.html`.
+2. Add a `describe` block at the end of the test section.
+3. Open `tests.html` in the browser to verify.
+
+> **Keep functions in sync.** When you modify a function in `index.html`, update the copy in `tests.html` as well, otherwise tests may pass against stale code.
+
+---
+
 ## Git Workflow
 
 - Default development branch: `master`
