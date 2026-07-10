@@ -2119,20 +2119,20 @@ function doEurexSearch(){
   if(!q) return;
   state.eurexSearch=q;state.eurexResults=[];state.eurexError=null;state.eurexSelected=null;state.eurexContracts=[];state.eurexLoading=true;
   render();
-  eurexQuery('query($id:String){products(filter:{productId:$id}){productId productNameLong productType currency tickSize tickValue}}',{id:q},function(err,data){
+  eurexQuery('query($id:String){Products(filter:{productId:$id}){productId productNameLong productType currency tickSize tickValue}}',{id:q},function(err,data){
     state.eurexLoading=false;
     if(err){state.eurexError='API error: '+err.message;state.eurexApiOk=false;}
-    else{state.eurexResults=data.products||[];state.eurexApiOk=true;if(!state.eurexResults.length)state.eurexError='No product found. Try: ODAX, OESX, FGBL, OGBL';}
+    else{state.eurexResults=data.Products||[];state.eurexApiOk=true;if(!state.eurexResults.length)state.eurexError='No product found. Try: ODAX, OESX, FGBL, OGBL';}
     render();
   });
 }
 
 function doEurexContracts(productId){
-  eurexQuery('query($pid:String!){contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:productId},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:productId},function(err,data){
     state.eurexContractsLoading=false;
     if(!err){
       var today=new Date().toISOString().split('T')[0];
-      state.eurexContracts=(data.contracts||[]).filter(function(c){return c.expirationDate>=today;}).sort(function(a,b){return a.expirationDate.localeCompare(b.expirationDate);}).slice(0,60);
+      state.eurexContracts=(data.Contracts||[]).filter(function(c){return c.expirationDate>=today;}).sort(function(a,b){return a.expirationDate.localeCompare(b.expirationDate);}).slice(0,60);
     }
     render();
   });
@@ -2198,7 +2198,7 @@ function loadDaxSpot(idx){
 
 function loadIdeasChain(cb){
   state.ideasChainLoading=true; state.ideasChainError=null; render();
-  eurexQuery('query($pid:String!){contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:'ODAX'},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:'ODAX'},function(err,data){
     state.ideasChainLoading=false;
     if(err){
       state.ideasChainError='Eurex API error: '+err.message;
@@ -2207,7 +2207,7 @@ function loadIdeasChain(cb){
       return;
     }
     var today=new Date().toISOString().split('T')[0];
-    state.ideasChain=(data.contracts||[]).filter(function(c){
+    state.ideasChain=(data.Contracts||[]).filter(function(c){
       return c.callPutFlag==='P' && c.expirationDate>=today;
     }).sort(function(a,b){
       return a.expirationDate===b.expirationDate?a.strikePrice-b.strikePrice:a.expirationDate.localeCompare(b.expirationDate);
