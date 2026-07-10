@@ -2128,7 +2128,7 @@ function doEurexSearch(){
 }
 
 function doEurexContracts(productId){
-  eurexQuery('query($pid:String!){Contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:productId},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){contractId expirationDate strikePrice callPutFlag}}',{pid:productId},function(err,data){
     state.eurexContractsLoading=false;
     if(!err){
       var today=new Date().toISOString().split('T')[0];
@@ -2198,7 +2198,7 @@ function loadDaxSpot(idx){
 
 function loadIdeasChain(cb){
   state.ideasChainLoading=true; state.ideasChainError=null; render();
-  eurexQuery('query($pid:String!){Contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:'ODAX'},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){contractId expirationDate strikePrice callPutFlag}}',{pid:'ODAX'},function(err,data){
     state.ideasChainLoading=false;
     if(err){
       state.ideasChainError='Eurex API error: '+err.message;
