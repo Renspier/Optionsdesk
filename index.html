@@ -1245,7 +1245,7 @@ function renderIdeas(){
   }
 
   return '<div class="section-title">Trade Ideas</div>'+
-    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data, premiums are <b>Black-Scholes estimates</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) &mdash; not tradeable quotes. Always verify the actual premium in DEGIRO before entering.</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data. Premiums use Eurex\'s previous-day official settlement price when available (badged EUREX SETTLEMENT), and fall back to a <b>Black-Scholes estimate</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) otherwise. Settlement prices are still end-of-prior-day, not live intraday quotes &mdash; always verify the actual premium in DEGIRO before entering.</div>'+
     '<div class="card">'+spotRow+'</div>'+
     resultsHtml;
 }
@@ -1254,8 +1254,15 @@ function renderIdeaCard(idea,base){
   var newCredit=base.totalCreditOpen+idea.creditTotal;
   var newRisk=base.portfolioRisk+idea.maxRiskTotal;
   var newBestCasePnL=base.totalPnL+idea.maxProfitTotal;
+  var srcBadge=idea.pricingSource==='live'
+    ? '<span class="badge badge-accent" style="font-size:8px">EUREX SETTLEMENT</span>'
+    : idea.pricingSource==='mixed'
+      ? '<span class="badge" style="font-size:8px;background:rgba(251,191,36,.1);color:var(--yellow)">PARTLY ESTIMATED</span>'
+      : '<span class="badge badge-muted" style="font-size:8px">ESTIMATED</span>';
   return '<div class="card" style="min-width:0">'+
-    '<div style="font-family:var(--display);font-weight:800;font-size:14px;margin-bottom:2px">'+esc(idea.profile)+'</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">'+
+      '<span style="font-family:var(--display);font-weight:800;font-size:14px">'+esc(idea.profile)+'</span>'+srcBadge+
+    '</div>'+
     '<div style="font-size:10px;color:var(--muted);margin-bottom:12px">'+esc(idea.expiry)+' &middot; '+idea.dte+' DTE</div>'+
     '<div style="font-size:12px;line-height:2;margin-bottom:10px">'+
       '<div>SELL '+idea.contracts+'x P'+fmt(idea.shortStrike,0)+' @ ~'+fmt(idea.shortPrem,2)+'</div>'+
@@ -2119,20 +2126,30 @@ function doEurexSearch(){
   if(!q) return;
   state.eurexSearch=q;state.eurexResults=[];state.eurexError=null;state.eurexSelected=null;state.eurexContracts=[];state.eurexLoading=true;
   render();
-  eurexQuery('query($id:String){Products(filter:{productId:$id}){productId productNameLong productType currency tickSize tickValue}}',{id:q},function(err,data){
+  // NOTE: root field confirmed via introspection to be "ProductInfos" (not "Products").
+  // The filter/response shape below is still an educated guess pending live verification.
+  eurexQuery('query($id:String){ProductInfos(filter:{Product:{eq:$id}}){data{Product ProductLine}}}',{id:q},function(err,data){
     state.eurexLoading=false;
     if(err){state.eurexError='API error: '+err.message;state.eurexApiOk=false;}
-    else{state.eurexResults=data.Products||[];state.eurexApiOk=true;if(!state.eurexResults.length)state.eurexError='No product found. Try: ODAX, OESX, FGBL, OGBL';}
+    else{
+      var rows=(data.ProductInfos&&data.ProductInfos.data)||[];
+      state.eurexResults=rows.map(function(r){return{productId:r.Product,productNameLong:r.ProductLine||r.Product,productType:'',currency:'EUR'};});
+      state.eurexApiOk=true;
+      if(!state.eurexResults.length)state.eurexError='No product found. Try: ODAX, OESX, FGBL, OGBL';
+    }
     render();
   });
 }
 
 function doEurexContracts(productId){
-  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){contractId expirationDate strikePrice callPutFlag}}',{pid:productId},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){data{ContractID ExpirationDate Strike CallPut}}}',{pid:productId},function(err,data){
     state.eurexContractsLoading=false;
     if(!err){
       var today=new Date().toISOString().split('T')[0];
-      state.eurexContracts=(data.Contracts||[]).filter(function(c){return c.expirationDate>=today;}).sort(function(a,b){return a.expirationDate.localeCompare(b.expirationDate);}).slice(0,60);
+      var rows=(data.Contracts&&data.Contracts.data)||[];
+      state.eurexContracts=rows.map(function(c){
+        return{contractId:c.ContractID,expirationDate:c.ExpirationDate,strikePrice:c.Strike,callPutFlag:c.CallPut};
+      }).filter(function(c){return c.expirationDate>=today;}).sort(function(a,b){return a.expirationDate.localeCompare(b.expirationDate);}).slice(0,60);
     }
     render();
   });
@@ -2198,7 +2215,7 @@ function loadDaxSpot(idx){
 
 function loadIdeasChain(cb){
   state.ideasChainLoading=true; state.ideasChainError=null; render();
-  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){contractId expirationDate strikePrice callPutFlag}}',{pid:'ODAX'},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){data{ContractID ExpirationDate Strike CallPut PreviousDaySettlementPrice OptionsDelta}}}',{pid:'ODAX'},function(err,data){
     state.ideasChainLoading=false;
     if(err){
       state.ideasChainError='Eurex API error: '+err.message;
@@ -2207,7 +2224,13 @@ function loadIdeasChain(cb){
       return;
     }
     var today=new Date().toISOString().split('T')[0];
-    state.ideasChain=(data.Contracts||[]).filter(function(c){
+    var rows=(data.Contracts&&data.Contracts.data)||[];
+    state.ideasChain=rows.map(function(c){
+      return{
+        contractId:c.ContractID, expirationDate:c.ExpirationDate, strikePrice:c.Strike,
+        callPutFlag:c.CallPut, settlementPrice:c.PreviousDaySettlementPrice, delta:c.OptionsDelta
+      };
+    }).filter(function(c){
       return c.callPutFlag==='P' && c.expirationDate>=today;
     }).sort(function(a,b){
       return a.expirationDate===b.expirationDate?a.strikePrice-b.strikePrice:a.expirationDate.localeCompare(b.expirationDate);
@@ -2257,8 +2280,8 @@ function computeTradeIdeas(spot,ivPts){
       return Math.abs(new Date(d)-new Date(targetDateStr))<Math.abs(new Date(best)-new Date(targetDateStr))?d:best;
     },null);
     if(!expiry) return;
-    var strikesAtExpiry=state.ideasChain.filter(function(c){return c.expirationDate===expiry;})
-      .map(function(c){return c.strikePrice;}).sort(function(a,b){return a-b;});
+    var contractsAtExpiry=state.ideasChain.filter(function(c){return c.expirationDate===expiry;});
+    var strikesAtExpiry=contractsAtExpiry.map(function(c){return c.strikePrice;}).sort(function(a,b){return a-b;});
     if(strikesAtExpiry.length<2) return;
     var T=Math.max((new Date(expiry)-today)/86400000,1)/365;
     var targetShort=spot*(1-profile.kSigma*sigma*Math.sqrt(T));
@@ -2267,8 +2290,12 @@ function computeTradeIdeas(spot,ivPts){
     if(!lowerStrikes.length) return;
     var targetLong=shortStrike-profile.widthPts;
     var longStrike=lowerStrikes.reduce(function(best,s){return Math.abs(s-targetLong)<Math.abs(best-targetLong)?s:best;},lowerStrikes[0]);
-    var shortPrem=bsPut(spot,shortStrike,T,r,sigma);
-    var longPrem=bsPut(spot,longStrike,T,r,sigma);
+    var shortContract=contractsAtExpiry.filter(function(c){return c.strikePrice===shortStrike;})[0];
+    var longContract=contractsAtExpiry.filter(function(c){return c.strikePrice===longStrike;})[0];
+    var shortIsLive=!!(shortContract&&shortContract.settlementPrice!=null&&shortContract.settlementPrice>0);
+    var longIsLive=!!(longContract&&longContract.settlementPrice!=null&&longContract.settlementPrice>0);
+    var shortPrem=shortIsLive?shortContract.settlementPrice:bsPut(spot,shortStrike,T,r,sigma);
+    var longPrem=longIsLive?longContract.settlementPrice:bsPut(spot,longStrike,T,r,sigma);
     var creditPts=shortPrem-longPrem;
     if(creditPts<=0) return;
     var widthPts=shortStrike-longStrike;
@@ -2281,6 +2308,7 @@ function computeTradeIdeas(spot,ivPts){
       profile:profile.name, expiry:expiry, dte:Math.round((new Date(expiry)-today)/86400000),
       shortStrike:shortStrike, longStrike:longStrike, widthPts:widthPts, contracts:contracts,
       shortPrem:shortPrem, longPrem:longPrem, creditPts:creditPts,
+      pricingSource:(shortIsLive&&longIsLive)?'live':(shortIsLive||longIsLive)?'mixed':'estimate',
       creditTotal:creditPts*MULTIPLIER*contracts,
       maxRiskTotal:maxRiskEURPerContract*contracts,
       maxProfitTotal:creditPts*MULTIPLIER*contracts,
