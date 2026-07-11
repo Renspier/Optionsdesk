@@ -1711,6 +1711,72 @@ async function deployToGitHub(){
 function pad2(n){ return n<10?'0'+n:''+n; }
 // ═══════════════════════════════════════════════════════════════════════════
 
+function applyVdaxData(lookup,source){
+  var keys=Object.keys(lookup).sort();
+  if(!keys.length) throw new Error('No VDAX data parsed');
+  var lastKey=keys[keys.length-1];
+  var vals=keys.map(function(k){return lookup[k];});
+  state.vdax=lookup;
+  state.vdaxLoading=false;
+  state.vdaxError=null;
+  state.vdaxMeta={from:keys[0],to:lastKey,count:keys.length,
+    min:Math.min.apply(null,vals),max:Math.max.apply(null,vals),
+    latest:lookup[lastKey],latestDate:lastKey,source:source};
+  render();
+}
+
+// Stooq CSV endpoint - CORS friendly, no API key needed. Primary source.
+function loadVdaxFromStooq(){
+  var url='https://stooq.com/q/d/l/?s=v1x.de&i=d';
+  return fetch(url).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }).then(function(csv){
+    // Parse CSV: Date,Open,High,Low,Close,Volume
+    var lines=csv.trim().split('\n');
+    if(lines.length<2) throw new Error('Empty response');
+    var lookup={};
+    var cutoff=new Date(Date.now()-2*365*86400*1000).toISOString().slice(0,10);
+    for(var i=1;i<lines.length;i++){
+      var cols=lines[i].split(',');
+      if(cols.length<5) continue;
+      var date=cols[0].trim();   // YYYY-MM-DD
+      var close=parseFloat(cols[4]);
+      if(!date||isNaN(close)) continue;
+      if(date<cutoff) continue; // keep last 2 years
+      lookup[date]=close;
+    }
+    if(!Object.keys(lookup).length) throw new Error('No rows parsed');
+    return lookup;
+  });
+}
+
+// Yahoo Finance chart endpoint - fallback if Stooq is unreachable/rate-limited.
+// No API key needed; unlike Yahoo's older quote APIs this one has historically
+// allowed direct browser fetches, but that could change without notice.
+function loadVdaxFromYahoo(){
+  var url='https://query1.finance.yahoo.com/v8/finance/chart/V1X.DE?range=2y&interval=1d';
+  return fetch(url).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(json){
+    var result=json&&json.chart&&json.chart.result&&json.chart.result[0];
+    if(!result) throw new Error('Unexpected response shape');
+    var ts=result.timestamp||[];
+    var closes=(result.indicators&&result.indicators.quote&&result.indicators.quote[0]&&result.indicators.quote[0].close)||[];
+    var lookup={};
+    for(var i=0;i<ts.length;i++){
+      var close=closes[i];
+      if(close==null||isNaN(close)) continue;
+      var d=new Date(ts[i]*1000);
+      var date=d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
+      lookup[date]=close;
+    }
+    if(!Object.keys(lookup).length) throw new Error('No rows parsed');
+    return lookup;
+  });
+}
+
 function loadVdax(){
   if(state.vdaxLoading) return;
   if(typeof fetch==='undefined'){
@@ -1719,45 +1785,16 @@ function loadVdax(){
   }
   state.vdaxLoading=true;
   state.vdaxError=null;
-  // Stooq CSV endpoint - CORS friendly, no API key needed
-  // Returns 2 years of daily data for V1X.DE (VDAX-NEW)
-  var url='https://stooq.com/q/d/l/?s=v1x.de&i=d';
-  fetch(url)
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      return r.text();
-    })
-    .then(function(csv){
-      // Parse CSV: Date,Open,High,Low,Close,Volume
-      var lines=csv.trim().split('\n');
-      if(lines.length<2) throw new Error('Empty VDAX data');
-      var lookup={}, vals=[];
-      // Stooq returns newest first, skip header
-      for(var i=1;i<lines.length;i++){
-        var cols=lines[i].split(',');
-        if(cols.length<5) continue;
-        var date=cols[0].trim();   // YYYY-MM-DD
-        var close=parseFloat(cols[4]);
-        if(!date||isNaN(close)) continue;
-        // Only keep last 2 years
-        if(date < new Date(Date.now()-2*365*86400*1000).toISOString().slice(0,10)) continue;
-        lookup[date]=close;
-        vals.push(close);
-      }
-      var keys=Object.keys(lookup).sort();
-      if(!keys.length) throw new Error('No VDAX data parsed');
-      var lastKey=keys[keys.length-1];
-      state.vdax=lookup;
-      state.vdaxLoading=false;
-      state.vdaxMeta={from:keys[0],to:lastKey,count:keys.length,
-        min:Math.min.apply(null,vals),max:Math.max.apply(null,vals),
-        latest:lookup[lastKey],latestDate:lastKey};
-      render();
-    })
-    .catch(function(err){
-      state.vdaxLoading=false;
-      state.vdaxError=err.message||'Failed to load VDAX data';
-      render();
+  loadVdaxFromStooq()
+    .then(function(lookup){ applyVdaxData(lookup,'Stooq'); })
+    .catch(function(stooqErr){
+      loadVdaxFromYahoo()
+        .then(function(lookup){ applyVdaxData(lookup,'Yahoo Finance'); })
+        .catch(function(yahooErr){
+          state.vdaxLoading=false;
+          state.vdaxError='Stooq: '+(stooqErr.message||'failed')+' · Yahoo: '+(yahooErr.message||'failed');
+          render();
+        });
     });
 }
 
@@ -1814,7 +1851,7 @@ function vdaxIVCrushPct(pos){
 function renderVdaxBadge(){
   if(state.vdaxLoading) return '<span style="font-size:9px;color:var(--muted);margin-left:8px">VDAX...</span>';
   if(state.vdaxError)   return '<span style="font-size:9px;color:var(--red);margin-left:8px" title="'+esc(state.vdaxError)+'" onclick="state.vdaxLoading=false;loadVdax();" style="cursor:pointer">VDAX &#x2717; (tap to retry)</span>';
-  if(state.vdaxMeta)    return '<span style="font-size:9px;color:var(--accent);margin-left:8px" title="VDAX-NEW '+state.vdaxMeta.latestDate+'">VDAX &#x2713; '+state.vdaxMeta.latest.toFixed(1)+'</span>';
+  if(state.vdaxMeta)    return '<span style="font-size:9px;color:var(--accent);margin-left:8px" title="VDAX-NEW '+state.vdaxMeta.latestDate+' via '+esc(state.vdaxMeta.source||'')+'">VDAX &#x2713; '+state.vdaxMeta.latest.toFixed(1)+'</span>';
   return '';
 }
 
@@ -1854,7 +1891,7 @@ function renderVdaxCard(pos){
         '<div style="font-size:9px;color:var(--muted)">entry &#x2192; now</div>'+
       '</div>'+
     '</div>'+
-    (state.vdaxMeta?'<div style="margin-top:10px;font-size:9px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">VDAX-NEW range: '+state.vdaxMeta.min.toFixed(1)+' - '+state.vdaxMeta.max.toFixed(1)+' &middot; '+state.vdaxMeta.count+' trading days &middot; Yahoo Finance (V1X.DE)</div>':'')+
+    (state.vdaxMeta?'<div style="margin-top:10px;font-size:9px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">VDAX-NEW range: '+state.vdaxMeta.min.toFixed(1)+' - '+state.vdaxMeta.max.toFixed(1)+' &middot; '+state.vdaxMeta.count+' trading days &middot; '+esc(state.vdaxMeta.source||'V1X.DE')+'</div>':'')+
   '</div>';
 }
 
