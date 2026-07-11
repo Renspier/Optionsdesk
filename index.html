@@ -106,6 +106,17 @@ var fmtPct = function(n){
 };
 var pcClass = function(n){ return n>=0?'pos-green':'pos-red'; };
 var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+var MONTH_ABBR=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+// Formats an ISO date (YYYY-MM-DD) as e.g. "17 JUL '26" -- the numeric month in a
+// raw ISO string is easy to miss at a glance, so the month is always spelled out.
+var fmtExpiry = function(iso){
+  if(!iso) return '—';
+  var parts=String(iso).split('-');
+  if(parts.length!==3) return iso;
+  var mIdx=parseInt(parts[1],10)-1;
+  var mon=MONTH_ABBR[mIdx]||parts[1];
+  return parseInt(parts[2],10)+' '+mon+' \''+parts[0].slice(2);
+};
 
 // P&L formula: sign * (currentPremium - entryPremium) * netContracts * 5
 // - sign: +1 for BUY, -1 for SELL
@@ -623,11 +634,11 @@ function renderDashboard(){
     return ea.localeCompare(eb); // soonest expiry first
   }).map(function(pos){
     var pnl=calcPnL(pos);
-    var expiry=(pos.legs&&pos.legs[0]&&pos.legs[0].expiry)||'—';
+    var expiry=pos.legs&&pos.legs[0]?pos.legs[0].expiry:null;
     return '<tr class="row-click" data-posid="'+pos.id+'" data-goto="detail">'+
       '<td style="font-family:var(--display);font-weight:700;color:var(--accent)">'+esc(pos.ticker)+'</td>'+
       '<td style="color:var(--muted);font-size:11px">'+esc(pos.type)+'</td>'+
-      '<td style="color:var(--yellow);font-size:11px">'+esc(expiry)+'</td>'+
+      '<td style="color:var(--yellow);font-size:11px;white-space:nowrap">'+esc(fmtExpiry(expiry))+'</td>'+
       '<td><span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+( pos.source==='degiro'?'DeGiro':'Manual')+'</span></td>'+
       '<td style="color:var(--muted)">'+pos.legs.length+'</td>'+
       '<td>'+pos.contracts+'</td>'+
@@ -679,7 +690,7 @@ function renderPositions(){
   var rows=filtered.map(function(pos){
     var pnl=calcPnL(pos);
     var sc=pos.status==='Open'?'badge-accent':pos.status==='Expired'?'badge-red':'badge-muted';
-    var expiry=(pos.legs&&pos.legs[0]&&pos.legs[0].expiry)||'—';
+    var expiry=pos.legs&&pos.legs[0]?pos.legs[0].expiry:null;
     return '<div class="pos-row row-click" data-posid="'+pos.id+'" data-goto="detail">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
         '<span style="font-family:var(--display);font-weight:700;color:var(--accent);font-size:15px">'+esc(pos.ticker)+'</span>'+
@@ -689,7 +700,7 @@ function renderPositions(){
         '<span>'+esc(pos.type)+'</span>'+
         '<span>·</span><span>'+pos.legs.length+' legs</span>'+
         '<span>·</span><span>'+pos.contracts+'x</span>'+
-        '<span>·</span><span style="color:var(--yellow)">exp '+esc(expiry)+'</span>'+
+        '<span>·</span><span style="color:var(--yellow);font-weight:600">exp '+esc(fmtExpiry(expiry))+'</span>'+
         '<span class="badge '+sc+'">'+pos.status+'</span>'+
         '<span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+(pos.source==='degiro'?'DeGiro':'Manual')+'</span>'+
         '<span style="margin-left:auto" class="'+pcClass(pnl.pct)+'">'+fmtPct(pnl.pct)+'</span>'+
@@ -744,7 +755,7 @@ function renderDetail(){
       '<td><span style="color:'+(leg.action==='BUY'?'var(--accent)':'var(--red)')+';font-weight:700">'+leg.action+'</span></td>'+
       '<td>'+esc(leg.optType)+'</td>'+
       '<td style="font-weight:600">'+leg.strike+'</td>'+
-      '<td style="color:var(--muted);font-size:11px">'+esc(leg.expiry||'—')+'</td>'+
+      '<td style="color:var(--yellow);font-size:11px;white-space:nowrap">'+esc(fmtExpiry(leg.expiry))+'</td>'+
       '<td>'+entryCell+'</td>'+
       '<td>'+currCell+'</td>'+
       '<td class="'+pcClass(lp)+'">'+fmtE(lp)+'</td>'+
@@ -777,7 +788,7 @@ function renderDetail(){
         return '<div style="margin-bottom:12px">'+
           '<div style="font-size:11px;font-weight:600;margin-bottom:6px">'+
             '<span style="color:'+(leg.action==='BUY'?'var(--accent)':'var(--red)')+'">'+leg.action+'</span>'+
-            ' '+leg.optType+' '+leg.strike+' ('+leg.expiry+')'+
+            ' '+leg.optType+' '+leg.strike+' ('+fmtExpiry(leg.expiry)+')'+
             (leg.txnMatched?' <span style="color:var(--accent);font-size:9px;background:var(--accentD);padding:1px 6px;border-radius:3px">VWAP entry used</span>':'')+
           '</div>'+
           '<table class="tbl" style="font-size:11px">'+
@@ -995,7 +1006,7 @@ function renderAnalytics(){
       '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
       '<td>'+badge+'</td>'+
       '<td style="font-size:11px">'+p.optType+' '+p.strike+'</td>'+
-      '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+      '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+fmtExpiry(p.expiry)+'</td>'+
       '<td>'+p.matchedQty+'x</td>'+
       '<td>'+fmtE(p.openPrice)+'</td>'+
       '<td>'+fmtE(p.closePrice)+'</td>'+
@@ -1016,14 +1027,23 @@ function renderAnalytics(){
   '</div>';
 
   // ── 3. Roll analysis ──
+  function uniqExpiries(arr){
+    var seen={},out=[];
+    arr.forEach(function(t){ if(!seen[t.expiry]){seen[t.expiry]=1;out.push(t.expiry);} });
+    return out;
+  }
   var rollRows = rolls.map(function(r){
-    var sellDesc = r.sells.map(function(t){return t.strike+' exp:'+t.expiry.slice(5)+' @'+t.koers;}).join(', ');
-    var buyDesc  = r.buys.map(function(t){ return t.strike+' exp:'+t.expiry.slice(5)+' @'+t.koers;}).join(', ');
+    var sellDesc = r.sells.map(function(t){return t.strike+' exp:'+fmtExpiry(t.expiry)+' @'+t.koers;}).join(', ');
+    var buyDesc  = r.buys.map(function(t){ return t.strike+' exp:'+fmtExpiry(t.expiry)+' @'+t.koers;}).join(', ');
     var creditColor = r.netCredit>=0?'var(--accent)':'var(--red)';
+    var sellExpLabel=uniqExpiries(r.sells).map(fmtExpiry).join('/');
+    var buyExpLabel=uniqExpiries(r.buys).map(fmtExpiry).join('/');
+    var expiryLabel=sellExpLabel===buyExpLabel?sellExpLabel:sellExpLabel+' &rarr; '+buyExpLabel;
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px">'+r.date+'</td>'+
       '<td style="font-weight:700;color:var(--accent)">'+esc(r.ticker)+'</td>'+
       '<td><span style="font-size:10px;background:var(--surface);padding:2px 7px;border-radius:4px">'+esc(r.rollType)+'</span></td>'+
+      '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+expiryLabel+'</td>'+
       '<td style="font-size:11px;color:var(--red)">SELL '+sellDesc+'</td>'+
       '<td style="font-size:11px;color:var(--accent)">BUY '+buyDesc+'</td>'+
       '<td style="font-weight:700;color:'+creditColor+'">'+fmtE(r.netCredit)+'/ctr</td>'+
@@ -1035,7 +1055,7 @@ function renderAnalytics(){
     '<div style="color:var(--muted);font-size:11px;margin-bottom:14px">Same-day trades on same ticker+option type = roll or spread adjustment detected</div>'+
     (rolls.length?
       '<div style="overflow-x:auto"><table class="tbl" style="font-size:11px">'+
-        '<thead><tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>SOLD / OPENED</th><th>BOUGHT / CLOSED</th><th>NET CREDIT</th></tr></thead>'+
+        '<thead><tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>EXPIRY</th><th>SOLD / OPENED</th><th>BOUGHT / CLOSED</th><th>NET CREDIT</th></tr></thead>'+
         '<tbody>'+rollRows+'</tbody>'+
       '</table></div>':
       '<div style="color:var(--muted);font-size:12px;padding:16px 0">No rolls detected in transaction history</div>')+
@@ -1074,7 +1094,7 @@ function renderAnalytics(){
         '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
         '<td>'+p.optType+'</td>'+
         '<td style="font-weight:600">'+p.strike+'</td>'+
-        '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+        '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+fmtExpiry(p.expiry)+'</td>'+
         '<td>'+p.matchedQty+'x</td>'+
         '<td style="font-weight:600">'+fmtE(p.openPrice)+'</td>'+
         '<td class="'+pcClass(p.netPnL)+'">'+fmtE(p.netPnL)+'</td>'+
@@ -1102,7 +1122,7 @@ function renderAnalytics(){
         '<td style="color:var(--muted);font-size:11px">'+p.openDate+'</td>'+
         '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
         '<td style="font-size:11px">'+p.optType+' '+p.strike+'</td>'+
-        '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+        '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+fmtExpiry(p.expiry)+'</td>'+
         '<td>'+p.matchedQty+'x</td>'+
         '<td style="font-weight:600">'+fmtE(p.openPrice)+'</td>'+
         '<td style="font-weight:600">'+fmtE(p.closePrice)+'</td>'+
@@ -1293,10 +1313,13 @@ function renderIdeaCard(idea,base){
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">'+
       '<span style="font-family:var(--display);font-weight:800;font-size:14px">'+esc(idea.profile)+'</span>'+srcBadge+
     '</div>'+
-    '<div style="font-size:10px;color:var(--muted);margin-bottom:12px">'+esc(idea.expiry)+' &middot; '+idea.dte+' DTE</div>'+
+    '<div style="margin-bottom:12px">'+
+      '<span class="badge" style="background:rgba(251,191,36,.1);color:var(--yellow);font-size:10px;font-weight:700">EXP '+esc(fmtExpiry(idea.expiry))+'</span>'+
+      '<span style="font-size:10px;color:var(--muted)"> &middot; '+idea.dte+' DTE</span>'+
+    '</div>'+
     '<div style="font-size:12px;line-height:2;margin-bottom:10px">'+
-      '<div>SELL '+idea.contracts+'x P'+fmt(idea.shortStrike,0)+' @ ~'+fmt(idea.shortPrem,2)+'</div>'+
-      '<div>BUY '+idea.contracts+'x P'+fmt(idea.longStrike,0)+' @ ~'+fmt(idea.longPrem,2)+'</div>'+
+      '<div>SELL '+idea.contracts+'x P'+fmt(idea.shortStrike,0)+' @ ~'+fmt(idea.shortPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
+      '<div>BUY '+idea.contracts+'x P'+fmt(idea.longStrike,0)+' @ ~'+fmt(idea.longPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
       '<div style="color:var(--muted)">Width '+fmt(idea.widthPts,0)+' pts</div>'+
     '</div>'+
     '<div style="border-top:1px solid var(--border);padding-top:10px;font-size:12px;line-height:1.9">'+
