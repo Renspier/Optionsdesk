@@ -173,7 +173,8 @@ var state = {
   newLegs: [],
   addLegOpen: false,
   // Trade Ideas module
-  ideasMaxRisk: 3000,
+  ideasMaxRisk: 3000,   // credit spreads: cap on the contingent expiration loss (width - credit)
+  ideasMaxDebit: 3000,  // debit spreads: cap on the actual cash paid upfront
   ideasSpot: null,
   ideasSpotDate: null,
   ideasSpotLoading: false,
@@ -1271,13 +1272,19 @@ function renderIdeas(){
     '</div>'+
     '<div class="form-grid-2">'+
       '<div class="form-field">'+
-        '<span class="form-label">MAX RISK PER TRADE (€)</span>'+
+        '<span class="form-label">MAX RISK PER TRADE (€) &middot; credit spreads</span>'+
         '<input id="ideas-risk-inp" type="text" inputmode="decimal" value="'+fmt(state.ideasMaxRisk,0)+'"/>'+
+        '<div style="font-size:9px;color:var(--muted);margin-top:4px">Bull Put Spread &mdash; contingent loss if it expires against you (width &minus; credit), not cash paid upfront</div>'+
       '</div>'+
       '<div class="form-field">'+
-        '<span class="form-label">EXPECTED MOVE % (optional)</span>'+
-        '<input id="ideas-move-inp" type="text" inputmode="decimal" placeholder="e.g. 5 — blank = auto" value="'+(state.ideasTargetMovePct!=null?fmt(state.ideasTargetMovePct,0):'')+'"/>'+
+        '<span class="form-label">MAX DEBIT INVESTMENT (€) &middot; debit spreads</span>'+
+        '<input id="ideas-debit-inp" type="text" inputmode="decimal" value="'+fmt(state.ideasMaxDebit,0)+'"/>'+
+        '<div style="font-size:9px;color:var(--muted);margin-top:4px">Bear Put / Bull Call Spread &mdash; actual cash paid upfront, the full amount is always at risk</div>'+
       '</div>'+
+    '</div>'+
+    '<div class="form-field">'+
+      '<span class="form-label">EXPECTED MOVE % (optional)</span>'+
+      '<input id="ideas-move-inp" type="text" inputmode="decimal" placeholder="e.g. 5 — blank = auto" value="'+(state.ideasTargetMovePct!=null?fmt(state.ideasTargetMovePct,0):'')+'"/>'+
     '</div>'+
     (state.ideasSpotError?'<div style="color:var(--red);font-size:11px;margin-bottom:10px">'+esc(state.ideasSpotError)+'</div>':'')+
     '<button class="btn-accent" id="btn-ideas-generate" style="width:100%;padding:12px">'+
@@ -1614,11 +1621,19 @@ function pad2(n){ return n<10?'0'+n:''+n; }
 
 // Some browsers/networks block direct fetch() to stooq.com/finance.yahoo.com
 // even though the sites load fine via normal navigation (a CORS restriction on
-// XHR/fetch specifically, invisible when just browsing to the site). This proxy
-// re-issues the request server-side and returns it with permissive CORS headers,
-// used only as a last-resort fallback after direct attempts fail.
-var CORS_PROXY_PREFIX='https://api.allorigins.win/raw?url=';
-function maybeProxied(url,useProxy){ return useProxy?CORS_PROXY_PREFIX+encodeURIComponent(url):url; }
+// XHR/fetch specifically, invisible when just browsing to the site). These free
+// public CORS proxies re-issue the request server-side with permissive CORS
+// headers, used only as a fallback after direct attempts fail. Chaining several
+// matters -- any single one of these free services can be down/rate-limited at
+// any given time (api.allorigins.win has returned bare 500s before), so no one
+// of them can be trusted alone.
+var CORS_PROXIES=[
+  function(url){ return 'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(url); },
+  function(url){ return 'https://corsproxy.io/?url='+encodeURIComponent(url); },
+  function(url){ return 'https://api.allorigins.win/raw?url='+encodeURIComponent(url); }
+];
+// proxyIdx: null/undefined = direct fetch, else index into CORS_PROXIES.
+function maybeProxied(url,proxyIdx){ return proxyIdx==null?url:CORS_PROXIES[proxyIdx](url); }
 
 // Tries each function in order, returning the first success. If all fail, rejects
 // with a combined error message so the user can see exactly what was attempted.
@@ -1652,9 +1667,9 @@ function applyVdaxData(lookup,source){
 }
 
 // Stooq CSV endpoint - CORS friendly, no API key needed. Primary source.
-function loadVdaxFromStooq(useProxy){
+function loadVdaxFromStooq(proxyIdx){
   var url='https://stooq.com/q/d/l/?s=v1x.de&i=d';
-  return fetch(maybeProxied(url,useProxy)).then(function(r){
+  return fetch(maybeProxied(url,proxyIdx)).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.text();
   }).then(function(csv){
@@ -1680,9 +1695,9 @@ function loadVdaxFromStooq(useProxy){
 // Yahoo Finance chart endpoint - fallback if Stooq is unreachable/rate-limited.
 // No API key needed; unlike Yahoo's older quote APIs this one has historically
 // allowed direct browser fetches, but that could change without notice.
-function loadVdaxFromYahoo(useProxy){
+function loadVdaxFromYahoo(proxyIdx){
   var url='https://query1.finance.yahoo.com/v8/finance/chart/V1X.DE?range=2y&interval=1d';
-  return fetch(maybeProxied(url,useProxy)).then(function(r){
+  return fetch(maybeProxied(url,proxyIdx)).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.json();
   }).then(function(json){
@@ -1711,12 +1726,15 @@ function loadVdax(){
   }
   state.vdaxLoading=true;
   state.vdaxError=null;
-  tryInOrder([
-    function(){ return loadVdaxFromStooq(false).then(function(l){return{lookup:l,source:'Stooq'};}); },
-    function(){ return loadVdaxFromYahoo(false).then(function(l){return{lookup:l,source:'Yahoo Finance'};}); },
-    function(){ return loadVdaxFromStooq(true).then(function(l){return{lookup:l,source:'Stooq (proxied)'};}); },
-    function(){ return loadVdaxFromYahoo(true).then(function(l){return{lookup:l,source:'Yahoo Finance (proxied)'};}); }
-  ]).then(function(res){
+  var attempts=[
+    function(){ return loadVdaxFromStooq(null).then(function(l){return{lookup:l,source:'Stooq'};}); },
+    function(){ return loadVdaxFromYahoo(null).then(function(l){return{lookup:l,source:'Yahoo Finance'};}); }
+  ];
+  CORS_PROXIES.forEach(function(_,i){
+    attempts.push(function(){ return loadVdaxFromStooq(i).then(function(l){return{lookup:l,source:'Stooq (proxy '+(i+1)+')'};}); });
+    attempts.push(function(){ return loadVdaxFromYahoo(i).then(function(l){return{lookup:l,source:'Yahoo Finance (proxy '+(i+1)+')'};}); });
+  });
+  tryInOrder(attempts).then(function(res){
     applyVdaxData(res.lookup,res.source);
   }).catch(function(err){
     state.vdaxLoading=false;
@@ -1995,6 +2013,12 @@ function bindEvents(){
     if(!isNaN(val)&&val>0) state.ideasMaxRisk=val;
     render();
   });
+  var ideasDebitInp=document.getElementById('ideas-debit-inp');
+  if(ideasDebitInp) ideasDebitInp.addEventListener('change',function(){
+    var val=parseFloat(this.value.replace(',','.'));
+    if(!isNaN(val)&&val>0) state.ideasMaxDebit=val;
+    render();
+  });
   var ideasMoveInp=document.getElementById('ideas-move-inp');
   if(ideasMoveInp) ideasMoveInp.addEventListener('change',function(){
     var val=parseFloat(this.value.replace(',','.'));
@@ -2215,9 +2239,9 @@ var STRATEGY_SPECS=[
   {key:'bullCall',label:'Bull Call Spread', optType:'C', dirSign:1,  isCredit:false, profitAbove:true}
 ];
 
-function loadDaxSpotFromStooq(symbol,useProxy){
+function loadDaxSpotFromStooq(symbol,proxyIdx){
   var url='https://stooq.com/q/d/l/?s='+symbol+'&i=d';
-  return fetch(maybeProxied(url,useProxy)).then(function(r){
+  return fetch(maybeProxied(url,proxyIdx)).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.text();
   }).then(function(csv){
@@ -2230,9 +2254,9 @@ function loadDaxSpotFromStooq(symbol,useProxy){
   });
 }
 
-function loadDaxSpotFromYahoo(useProxy){
+function loadDaxSpotFromYahoo(proxyIdx){
   var url='https://query1.finance.yahoo.com/v8/finance/chart/%5EGDAXI?range=5d&interval=1d';
-  return fetch(maybeProxied(url,useProxy)).then(function(r){
+  return fetch(maybeProxied(url,proxyIdx)).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.json();
   }).then(function(json){
@@ -2257,13 +2281,15 @@ function loadDaxSpot(){
   state.ideasSpotError=null;
   var attempts=[];
   DAX_SYMBOL_CANDIDATES.forEach(function(sym){
-    attempts.push(function(){ return loadDaxSpotFromStooq(sym,false).then(function(r){return{r:r,source:'Stooq ('+sym.replace('%5E','^')+')'};}); });
+    attempts.push(function(){ return loadDaxSpotFromStooq(sym,null).then(function(r){return{r:r,source:'Stooq ('+sym.replace('%5E','^')+')'};}); });
   });
-  attempts.push(function(){ return loadDaxSpotFromYahoo(false).then(function(r){return{r:r,source:'Yahoo Finance'};}); });
-  DAX_SYMBOL_CANDIDATES.forEach(function(sym){
-    attempts.push(function(){ return loadDaxSpotFromStooq(sym,true).then(function(r){return{r:r,source:'Stooq (proxied)'};}); });
+  attempts.push(function(){ return loadDaxSpotFromYahoo(null).then(function(r){return{r:r,source:'Yahoo Finance'};}); });
+  CORS_PROXIES.forEach(function(_,i){
+    DAX_SYMBOL_CANDIDATES.forEach(function(sym){
+      attempts.push(function(){ return loadDaxSpotFromStooq(sym,i).then(function(r){return{r:r,source:'Stooq (proxy '+(i+1)+')'};}); });
+    });
+    attempts.push(function(){ return loadDaxSpotFromYahoo(i).then(function(r){return{r:r,source:'Yahoo Finance (proxy '+(i+1)+')'};}); });
   });
-  attempts.push(function(){ return loadDaxSpotFromYahoo(true).then(function(r){return{r:r,source:'Yahoo Finance (proxied)'};}); });
   tryInOrder(attempts).then(function(res){
     state.ideasSpot=res.r.close;
     state.ideasSpotDate=res.r.date;
@@ -2390,8 +2416,13 @@ function buildIdea(spec,profile,spot,sigma,r,today,expiries,targetMovePct){
     maxProfitEURPerContract=(widthPts-netFlow)*MULTIPLIER;
   }
   if(maxRiskEURPerContract<=0||maxProfitEURPerContract<0) return null;
-  if(maxRiskEURPerContract>state.ideasMaxRisk) return null; // even 1 contract would exceed the risk budget
-  var contracts=Math.max(1,Math.floor(state.ideasMaxRisk/maxRiskEURPerContract));
+  // Credit spreads (Bull Put) are capped by MAX RISK PER TRADE -- a contingent
+  // expiration loss, not cash paid upfront. Debit spreads (Bear Put/Bull Call)
+  // are capped by MAX DEBIT INVESTMENT -- maxRiskEURPerContract *is* the debit
+  // paid for those, so this caps the actual cash outlay.
+  var budget=spec.isCredit?state.ideasMaxRisk:state.ideasMaxDebit;
+  if(maxRiskEURPerContract>budget) return null; // even 1 contract would exceed the budget
+  var contracts=Math.max(1,Math.floor(budget/maxRiskEURPerContract));
   var breakeven=spec.optType==='P'?(nearStrike-netFlow):(nearStrike+netFlow);
   var d2be=(Math.log(spot/breakeven)+(r-sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
   var maxRiskTotal=maxRiskEURPerContract*contracts;

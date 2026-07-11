@@ -44,7 +44,11 @@ Whenever asked for trade ideas (in the app's IDEAS tab, or conversationally
 in chat), the method is the same:
 
 1. Inputs needed: current DAX spot, current VDAX-NEW level (or override IV%),
-   and a max-risk-per-trade budget in EUR.
+   and **two separate** budgets in EUR — these are not interchangeable:
+   `state.ideasMaxRisk` caps the Bull Put Spread's contingent expiration loss
+   (width − credit, capital held/at risk but not spent upfront), while
+   `state.ideasMaxDebit` caps the Bear Put/Bull Call Spread's actual cash
+   paid (the full debit is always at risk, more like buying a stock).
 2. Generate candidates for **three strategies** — Bull Put Spread (credit),
    Bear Put Spread (debit), Bull Call Spread (debit) — each with 3 profiles
    (Conservative/Balanced/Aggressive) that vary by **DTE and width** (not a
@@ -71,8 +75,10 @@ in chat), the method is the same:
    chain and strikes above spot; call premiums are estimated via put-call
    parity (`bsCall()`) when no live settlement price is available.
 3. Snap to real strikes/expiries from the Eurex chain (not arbitrary levels).
-4. Size contracts so max risk stays within the stated budget (never round up
-   past it — see the `maxRiskEURPerContract > state.ideasMaxRisk` guard).
+4. Size contracts so max risk stays within the *relevant* budget for that
+   strategy (never round up past it — see the
+   `maxRiskEURPerContract > state.ideasMaxRisk|ideasMaxDebit` guard in
+   `buildIdea()`, which picks the budget by `spec.isCredit`).
    For debit spreads the debit paid **is** the max risk (no further subtraction
    from width); for the credit spread max risk is `width - credit`.
 5. Report for each idea: strikes, width, contracts, **net credit received**
