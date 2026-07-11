@@ -1707,8 +1707,32 @@ async function deployToGitHub(){
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// VDAX-NEW INTEGRATION MODULE
+// Shared market-data fetch helpers (VDAX-NEW + DAX spot both use these)
 function pad2(n){ return n<10?'0'+n:''+n; }
+
+// Some browsers/networks block direct fetch() to stooq.com/finance.yahoo.com
+// even though the sites load fine via normal navigation (a CORS restriction on
+// XHR/fetch specifically, invisible when just browsing to the site). This proxy
+// re-issues the request server-side and returns it with permissive CORS headers,
+// used only as a last-resort fallback after direct attempts fail.
+var CORS_PROXY_PREFIX='https://api.allorigins.win/raw?url=';
+function maybeProxied(url,useProxy){ return useProxy?CORS_PROXY_PREFIX+encodeURIComponent(url):url; }
+
+// Tries each function in order, returning the first success. If all fail, rejects
+// with a combined error message so the user can see exactly what was attempted.
+function tryInOrder(fns){
+  var errors=[];
+  function attempt(i){
+    if(i>=fns.length) return Promise.reject(new Error(errors.join(' · ')));
+    return fns[i]().catch(function(err){
+      errors.push(err.message||'failed');
+      return attempt(i+1);
+    });
+  }
+  return attempt(0);
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// VDAX-NEW INTEGRATION MODULE
 // ═══════════════════════════════════════════════════════════════════════════
 
 function applyVdaxData(lookup,source){
@@ -1726,9 +1750,9 @@ function applyVdaxData(lookup,source){
 }
 
 // Stooq CSV endpoint - CORS friendly, no API key needed. Primary source.
-function loadVdaxFromStooq(){
+function loadVdaxFromStooq(useProxy){
   var url='https://stooq.com/q/d/l/?s=v1x.de&i=d';
-  return fetch(url).then(function(r){
+  return fetch(maybeProxied(url,useProxy)).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.text();
   }).then(function(csv){
@@ -1754,9 +1778,9 @@ function loadVdaxFromStooq(){
 // Yahoo Finance chart endpoint - fallback if Stooq is unreachable/rate-limited.
 // No API key needed; unlike Yahoo's older quote APIs this one has historically
 // allowed direct browser fetches, but that could change without notice.
-function loadVdaxFromYahoo(){
+function loadVdaxFromYahoo(useProxy){
   var url='https://query1.finance.yahoo.com/v8/finance/chart/V1X.DE?range=2y&interval=1d';
-  return fetch(url).then(function(r){
+  return fetch(maybeProxied(url,useProxy)).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.json();
   }).then(function(json){
@@ -1785,17 +1809,18 @@ function loadVdax(){
   }
   state.vdaxLoading=true;
   state.vdaxError=null;
-  loadVdaxFromStooq()
-    .then(function(lookup){ applyVdaxData(lookup,'Stooq'); })
-    .catch(function(stooqErr){
-      loadVdaxFromYahoo()
-        .then(function(lookup){ applyVdaxData(lookup,'Yahoo Finance'); })
-        .catch(function(yahooErr){
-          state.vdaxLoading=false;
-          state.vdaxError='Stooq: '+(stooqErr.message||'failed')+' · Yahoo: '+(yahooErr.message||'failed');
-          render();
-        });
-    });
+  tryInOrder([
+    function(){ return loadVdaxFromStooq(false).then(function(l){return{lookup:l,source:'Stooq'};}); },
+    function(){ return loadVdaxFromYahoo(false).then(function(l){return{lookup:l,source:'Yahoo Finance'};}); },
+    function(){ return loadVdaxFromStooq(true).then(function(l){return{lookup:l,source:'Stooq (proxied)'};}); },
+    function(){ return loadVdaxFromYahoo(true).then(function(l){return{lookup:l,source:'Yahoo Finance (proxied)'};}); }
+  ]).then(function(res){
+    applyVdaxData(res.lookup,res.source);
+  }).catch(function(err){
+    state.vdaxLoading=false;
+    state.vdaxError=err.message||'All VDAX sources failed';
+    render();
+  });
 }
 
 function vdaxNearest(dateStr){
@@ -2276,31 +2301,67 @@ function bsPut(S,K,T,r,sigma){
   return K*Math.exp(-r*T)*normCdf(-d2)-S*normCdf(-d1);
 }
 
-function loadDaxSpot(idx){
-  idx=idx||0;
-  if(idx>=DAX_SYMBOL_CANDIDATES.length){
+function loadDaxSpotFromStooq(symbol,useProxy){
+  var url='https://stooq.com/q/d/l/?s='+symbol+'&i=d';
+  return fetch(maybeProxied(url,useProxy)).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }).then(function(csv){
+    var lines=csv.trim().split('\n');
+    if(lines.length<2||lines[0].indexOf('Date')<0) throw new Error('No data');
+    var last=lines[lines.length-1].split(',');
+    var close=parseFloat(last[4]);
+    if(!close||isNaN(close)) throw new Error('Unparseable');
+    return{close:close,date:last[0]};
+  });
+}
+
+function loadDaxSpotFromYahoo(useProxy){
+  var url='https://query1.finance.yahoo.com/v8/finance/chart/%5EGDAXI?range=5d&interval=1d';
+  return fetch(maybeProxied(url,useProxy)).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(json){
+    var result=json&&json.chart&&json.chart.result&&json.chart.result[0];
+    if(!result) throw new Error('Unexpected response shape');
+    var ts=result.timestamp||[];
+    var closes=(result.indicators&&result.indicators.quote&&result.indicators.quote[0]&&result.indicators.quote[0].close)||[];
+    for(var i=ts.length-1;i>=0;i--){
+      if(closes[i]!=null&&!isNaN(closes[i])){
+        var d=new Date(ts[i]*1000);
+        return{close:closes[i],date:d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate())};
+      }
+    }
+    throw new Error('No rows parsed');
+  });
+}
+
+function loadDaxSpot(){
+  if(state.ideasSpotLoading) return;
+  if(typeof fetch==='undefined'){ state.ideasSpotError='fetch not available in this environment'; return; }
+  state.ideasSpotLoading=true;
+  state.ideasSpotError=null;
+  var attempts=[];
+  DAX_SYMBOL_CANDIDATES.forEach(function(sym){
+    attempts.push(function(){ return loadDaxSpotFromStooq(sym,false).then(function(r){return{r:r,source:'Stooq ('+sym.replace('%5E','^')+')'};}); });
+  });
+  attempts.push(function(){ return loadDaxSpotFromYahoo(false).then(function(r){return{r:r,source:'Yahoo Finance'};}); });
+  DAX_SYMBOL_CANDIDATES.forEach(function(sym){
+    attempts.push(function(){ return loadDaxSpotFromStooq(sym,true).then(function(r){return{r:r,source:'Stooq (proxied)'};}); });
+  });
+  attempts.push(function(){ return loadDaxSpotFromYahoo(true).then(function(r){return{r:r,source:'Yahoo Finance (proxied)'};}); });
+  tryInOrder(attempts).then(function(res){
+    state.ideasSpot=res.r.close;
+    state.ideasSpotDate=res.r.date;
+    state.ideasSpotSource='auto ('+res.source+')';
     state.ideasSpotLoading=false;
-    if(!state.ideasSpot) state.ideasSpotError='Could not auto-fetch DAX spot — enter it manually above.';
+    state.ideasSpotError=null;
     render();
-    return;
-  }
-  if(idx===0){ state.ideasSpotLoading=true; state.ideasSpotError=null; render(); }
-  var url='https://stooq.com/q/d/l/?s='+DAX_SYMBOL_CANDIDATES[idx]+'&i=d';
-  fetch(url).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
-    .then(function(csv){
-      var lines=csv.trim().split('\n');
-      if(lines.length<2||lines[0].indexOf('Date')<0) throw new Error('No data');
-      var last=lines[lines.length-1].split(',');
-      var close=parseFloat(last[4]);
-      if(!close||isNaN(close)) throw new Error('Unparseable');
-      state.ideasSpot=close;
-      state.ideasSpotDate=last[0];
-      state.ideasSpotSource='auto ('+DAX_SYMBOL_CANDIDATES[idx].replace('%5E','^')+')';
-      state.ideasSpotLoading=false;
-      state.ideasSpotError=null;
-      render();
-    })
-    .catch(function(){ loadDaxSpot(idx+1); });
+  }).catch(function(err){
+    state.ideasSpotLoading=false;
+    if(!state.ideasSpot) state.ideasSpotError='Could not auto-fetch DAX spot — enter it manually above. ('+(err.message||'all sources failed')+')';
+    render();
+  });
 }
 
 function loadIdeasChain(cb){
