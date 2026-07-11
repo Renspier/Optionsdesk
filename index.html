@@ -485,8 +485,25 @@ function eurexQuery(query,variables,callback){
   xhr.send(JSON.stringify({query:query,variables:variables||{}}));
 }
 
+// Positions are grouped by ticker+expiry (see groupIntoPositions), so all legs in a
+// position share one expiry. Nothing auto-transitions status by date on import/add,
+// so a position stays 'Open' forever unless the user manually closes it -- this sweep
+// flips any 'Open' position whose expiry has passed to 'Expired' so it drops out of
+// open-position/open-P&L aggregates instead of lingering as if still live.
+function sweepExpiredPositions(){
+  var today=new Date().toISOString().split('T')[0];
+  state.positions.forEach(function(pos){
+    var expiry=pos.legs&&pos.legs.length?pos.legs[0].expiry:null;
+    if(pos.status==='Open'&&expiry&&expiry<today){
+      pos.status='Expired';
+      if(!pos.closeDate) pos.closeDate=expiry;
+    }
+  });
+}
+
 // --- Render -------------------------------------------------------------------
 function render(){
+  sweepExpiredPositions();
   document.getElementById('hdr-date').textContent=new Date().toLocaleDateString('en-DE',{weekday:'short',day:'numeric',month:'short'});
   document.getElementById('hdr-degiro').style.display=state.positions.some(function(p){return p.source==='degiro';})&&state.positions.length>0?'inline':'none';
 
@@ -600,11 +617,17 @@ function renderDashboard(){
       '</div>';
   }).join('');
 
-  var rows=openPos.map(function(pos){
+  var rows=openPos.slice().sort(function(a,b){
+    var ea=(a.legs&&a.legs[0]&&a.legs[0].expiry)||'';
+    var eb=(b.legs&&b.legs[0]&&b.legs[0].expiry)||'';
+    return ea.localeCompare(eb); // soonest expiry first
+  }).map(function(pos){
     var pnl=calcPnL(pos);
+    var expiry=(pos.legs&&pos.legs[0]&&pos.legs[0].expiry)||'—';
     return '<tr class="row-click" data-posid="'+pos.id+'" data-goto="detail">'+
       '<td style="font-family:var(--display);font-weight:700;color:var(--accent)">'+esc(pos.ticker)+'</td>'+
       '<td style="color:var(--muted);font-size:11px">'+esc(pos.type)+'</td>'+
+      '<td style="color:var(--yellow);font-size:11px">'+esc(expiry)+'</td>'+
       '<td><span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+( pos.source==='degiro'?'DeGiro':'Manual')+'</span></td>'+
       '<td style="color:var(--muted)">'+pos.legs.length+'</td>'+
       '<td>'+pos.contracts+'</td>'+
@@ -623,7 +646,7 @@ function renderDashboard(){
         '<button class="btn-ghost" style="font-size:11px" data-goto="positions">ALL →</button>'+
       '</div>'+
       '<div style="overflow-x:auto"><table class="tbl">'+
-        '<thead><tr><th>PRODUCT</th><th>STRATEGY</th><th>SOURCE</th><th>LEGS</th><th>CTR</th><th>P&amp;L</th><th>RETURN</th></tr></thead>'+
+        '<thead><tr><th>PRODUCT</th><th>STRATEGY</th><th>EXPIRY</th><th>SOURCE</th><th>LEGS</th><th>CTR</th><th>P&amp;L</th><th>RETURN</th></tr></thead>'+
         '<tbody>'+rows+'</tbody>'+
       '</table></div>'+
     '</div>'+
@@ -644,6 +667,11 @@ function renderDashboard(){
 // --- Positions ----------------------------------------------------------------
 function renderPositions(){
   var filtered=state.filter==='All'?state.positions:state.positions.filter(function(p){return p.status===state.filter;});
+  filtered=filtered.slice().sort(function(a,b){
+    var ea=(a.legs&&a.legs[0]&&a.legs[0].expiry)||'';
+    var eb=(b.legs&&b.legs[0]&&b.legs[0].expiry)||'';
+    return eb.localeCompare(ea); // nearest/most-recent expiry first
+  });
   var pills=['All','Open','Closed','Expired'].map(function(f){
     return '<button class="fpill'+(state.filter===f?' on':'')+'" data-filter="'+f+'">'+f+'</button>';
   }).join('');
@@ -651,6 +679,7 @@ function renderPositions(){
   var rows=filtered.map(function(pos){
     var pnl=calcPnL(pos);
     var sc=pos.status==='Open'?'badge-accent':pos.status==='Expired'?'badge-red':'badge-muted';
+    var expiry=(pos.legs&&pos.legs[0]&&pos.legs[0].expiry)||'—';
     return '<div class="pos-row row-click" data-posid="'+pos.id+'" data-goto="detail">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
         '<span style="font-family:var(--display);font-weight:700;color:var(--accent);font-size:15px">'+esc(pos.ticker)+'</span>'+
@@ -660,6 +689,7 @@ function renderPositions(){
         '<span>'+esc(pos.type)+'</span>'+
         '<span>·</span><span>'+pos.legs.length+' legs</span>'+
         '<span>·</span><span>'+pos.contracts+'x</span>'+
+        '<span>·</span><span style="color:var(--yellow)">exp '+esc(expiry)+'</span>'+
         '<span class="badge '+sc+'">'+pos.status+'</span>'+
         '<span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+(pos.source==='degiro'?'DeGiro':'Manual')+'</span>'+
         '<span style="margin-left:auto" class="'+pcClass(pnl.pct)+'">'+fmtPct(pnl.pct)+'</span>'+
