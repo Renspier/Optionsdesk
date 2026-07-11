@@ -173,7 +173,8 @@ var state = {
   newLegs: [],
   addLegOpen: false,
   // Trade Ideas module
-  ideasMaxRisk: 3000,
+  ideasMaxRisk: 3000,   // credit spreads: cap on the contingent expiration loss (width - credit)
+  ideasMaxDebit: 3000,  // debit spreads: cap on the actual cash paid upfront
   ideasSpot: null,
   ideasSpotDate: null,
   ideasSpotLoading: false,
@@ -1271,13 +1272,19 @@ function renderIdeas(){
     '</div>'+
     '<div class="form-grid-2">'+
       '<div class="form-field">'+
-        '<span class="form-label">MAX RISK PER TRADE (€)</span>'+
+        '<span class="form-label">MAX RISK PER TRADE (€) &middot; credit spreads</span>'+
         '<input id="ideas-risk-inp" type="text" inputmode="decimal" value="'+fmt(state.ideasMaxRisk,0)+'"/>'+
+        '<div style="font-size:9px;color:var(--muted);margin-top:4px">Bull Put Spread &mdash; contingent loss if it expires against you (width &minus; credit), not cash paid upfront</div>'+
       '</div>'+
       '<div class="form-field">'+
-        '<span class="form-label">EXPECTED MOVE % (optional)</span>'+
-        '<input id="ideas-move-inp" type="text" inputmode="decimal" placeholder="e.g. 5 — blank = auto" value="'+(state.ideasTargetMovePct!=null?fmt(state.ideasTargetMovePct,0):'')+'"/>'+
+        '<span class="form-label">MAX DEBIT INVESTMENT (€) &middot; debit spreads</span>'+
+        '<input id="ideas-debit-inp" type="text" inputmode="decimal" value="'+fmt(state.ideasMaxDebit,0)+'"/>'+
+        '<div style="font-size:9px;color:var(--muted);margin-top:4px">Bear Put / Bull Call Spread &mdash; actual cash paid upfront, the full amount is always at risk</div>'+
       '</div>'+
+    '</div>'+
+    '<div class="form-field">'+
+      '<span class="form-label">EXPECTED MOVE % (optional)</span>'+
+      '<input id="ideas-move-inp" type="text" inputmode="decimal" placeholder="e.g. 5 — blank = auto" value="'+(state.ideasTargetMovePct!=null?fmt(state.ideasTargetMovePct,0):'')+'"/>'+
     '</div>'+
     (state.ideasSpotError?'<div style="color:var(--red);font-size:11px;margin-bottom:10px">'+esc(state.ideasSpotError)+'</div>':'')+
     '<button class="btn-accent" id="btn-ideas-generate" style="width:100%;padding:12px">'+
@@ -1995,6 +2002,12 @@ function bindEvents(){
     if(!isNaN(val)&&val>0) state.ideasMaxRisk=val;
     render();
   });
+  var ideasDebitInp=document.getElementById('ideas-debit-inp');
+  if(ideasDebitInp) ideasDebitInp.addEventListener('change',function(){
+    var val=parseFloat(this.value.replace(',','.'));
+    if(!isNaN(val)&&val>0) state.ideasMaxDebit=val;
+    render();
+  });
   var ideasMoveInp=document.getElementById('ideas-move-inp');
   if(ideasMoveInp) ideasMoveInp.addEventListener('change',function(){
     var val=parseFloat(this.value.replace(',','.'));
@@ -2390,8 +2403,13 @@ function buildIdea(spec,profile,spot,sigma,r,today,expiries,targetMovePct){
     maxProfitEURPerContract=(widthPts-netFlow)*MULTIPLIER;
   }
   if(maxRiskEURPerContract<=0||maxProfitEURPerContract<0) return null;
-  if(maxRiskEURPerContract>state.ideasMaxRisk) return null; // even 1 contract would exceed the risk budget
-  var contracts=Math.max(1,Math.floor(state.ideasMaxRisk/maxRiskEURPerContract));
+  // Credit spreads (Bull Put) are capped by MAX RISK PER TRADE -- a contingent
+  // expiration loss, not cash paid upfront. Debit spreads (Bear Put/Bull Call)
+  // are capped by MAX DEBIT INVESTMENT -- maxRiskEURPerContract *is* the debit
+  // paid for those, so this caps the actual cash outlay.
+  var budget=spec.isCredit?state.ideasMaxRisk:state.ideasMaxDebit;
+  if(maxRiskEURPerContract>budget) return null; // even 1 contract would exceed the budget
+  var contracts=Math.max(1,Math.floor(budget/maxRiskEURPerContract));
   var breakeven=spec.optType==='P'?(nearStrike-netFlow):(nearStrike+netFlow);
   var d2be=(Math.log(spot/breakeven)+(r-sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
   var maxRiskTotal=maxRiskEURPerContract*contracts;
