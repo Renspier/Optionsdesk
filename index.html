@@ -8,35 +8,36 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#080a0d;--surface:#0f1117;--border:#1a1d26;
-  --accent:#00e5b4;--accentD:rgba(0,229,180,0.09);
-  --red:#ff4560;--redD:rgba(255,69,96,0.09);
-  --yellow:#fbbf24;--text:#e2e8f0;--muted:#5a6375;--dim:#2a2f3d;
+  --bg:#000000;--surface:#0a0a0a;--border:#2b2b2b;
+  --accent:#ff9f0a;--accentD:rgba(255,159,10,0.12);
+  --green:#00e676;--greenD:rgba(0,230,118,0.1);
+  --red:#ff4d4d;--redD:rgba(255,77,77,0.1);
+  --yellow:#fbbf24;--text:#e5e5e5;--muted:#7a7a7a;--dim:#333333;
   --degiro:#ff6b35;--degiroD:rgba(255,107,53,0.1);
-  --mono:ui-monospace,'Menlo','Consolas','Courier New',monospace;--display:ui-rounded,'SF Pro Rounded','Trebuchet MS',system-ui,sans-serif;
+  --mono:ui-monospace,'SF Mono','Menlo','Consolas','Courier New',monospace;--display:var(--mono);
 }
 body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;min-height:100vh;-webkit-text-size-adjust:100%}
 input,select,button{font-family:var(--mono);font-size:13px;-webkit-appearance:none;appearance:none}
-input,select{background:#0a0c10;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;width:100%;outline:none}
+input,select{background:#050505;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:0;width:100%;outline:none}
 input:focus,select:focus{border-color:var(--accent)}
-button{cursor:pointer;border:none;border-radius:8px;transition:background .15s,color .15s}
+button{cursor:pointer;border:none;border-radius:0;transition:background .15s,color .15s}
 ::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
-.card-sm{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px}
+::-webkit-scrollbar-thumb{background:var(--dim);border-radius:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:0;padding:20px}
+.card-sm{background:var(--surface);border:1px solid var(--border);border-radius:0;padding:14px 18px}
 .btn-accent{background:var(--accent);color:#000;font-weight:700;padding:10px 20px;letter-spacing:.04em}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);padding:8px 14px}
-.btn-danger{background:var(--redD);color:var(--red);border:1px solid rgba(255,69,96,0.25);padding:8px 14px}
-.btn-degiro{background:var(--degiro);color:#fff;font-weight:700;padding:9px 22px}
-.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600}
+.btn-danger{background:var(--redD);color:var(--red);border:1px solid rgba(255,77,77,0.3);padding:8px 14px}
+.btn-degiro{background:var(--degiro);color:#000;font-weight:700;padding:9px 22px}
+.badge{display:inline-block;padding:2px 9px;border-radius:0;font-size:10px;font-weight:600}
 .badge-accent{background:var(--accentD);color:var(--accent)}
 .badge-degiro{background:var(--degiroD);color:var(--degiro)}
-.badge-muted{background:rgba(42,47,61,.7);color:var(--muted)}
+.badge-muted{background:rgba(122,122,122,.15);color:var(--muted)}
 .badge-red{background:var(--redD);color:var(--red)}
-.pos-green{color:var(--accent);font-weight:700}
+.pos-green{color:var(--green);font-weight:700}
 .pos-red{color:var(--red);font-weight:700}
 .row-click{cursor:pointer;transition:background .12s}
-.row-click:hover,.row-click:active{background:#13161f}
+.row-click:hover,.row-click:active{background:rgba(255,159,10,.06)}
 header{border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;height:52px;position:sticky;top:0;background:var(--bg);z-index:100;gap:8px}
 #main{max-width:1100px;margin:0 auto;padding:24px 16px}
 .metric-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px}
@@ -44,22 +45,22 @@ header{border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-i
 .metric-val{font-family:var(--display);font-size:22px;font-weight:800;margin:6px 0 4px}
 .metric-lbl{font-size:9px;letter-spacing:.1em;color:var(--muted)}
 .metric-sub{font-size:11px;color:var(--muted)}
-.section-title{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:16px}
+.section-title{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:16px;text-transform:uppercase}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{text-align:left;font-size:9px;letter-spacing:.08em;color:var(--muted);font-weight:400;padding-bottom:10px;padding-right:12px;white-space:nowrap}
+.tbl th{text-align:left;font-size:9px;letter-spacing:.08em;color:var(--muted);font-weight:400;padding-bottom:10px;padding-right:12px;white-space:nowrap;border-bottom:1px solid var(--border)}
 .tbl td{padding:10px 12px 10px 0;border-top:1px solid var(--border);vertical-align:middle}
 .filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
-.fpill{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:11px;font-family:var(--mono)}
+.fpill{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:0;padding:4px 14px;font-size:11px;font-family:var(--mono)}
 .fpill.on{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
-.pos-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px}
+.pos-row{background:var(--surface);border:1px solid var(--border);border-radius:0;padding:14px 16px;margin-bottom:8px}
 .pos-row-grid{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 nav{display:flex;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch}
 nav::-webkit-scrollbar{display:none}
-.navbtn{background:transparent;color:var(--muted);padding:6px 12px;font-size:11px;letter-spacing:.05em;white-space:nowrap;border-radius:6px}
+.navbtn{background:transparent;color:var(--muted);padding:6px 12px;font-size:11px;letter-spacing:.05em;white-space:nowrap;border-radius:0}
 .navbtn.on{background:var(--accentD);color:var(--accent)}
 .navbtn.on-import{background:var(--degiroD);color:var(--degiro)}
-.leg-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:9px 12px;background:#0a0c10;border-radius:6px;margin-bottom:5px}
-.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;background:#0a0c10;position:relative;overflow:hidden}
+.leg-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:9px 12px;background:#050505;border:1px solid var(--border);border-radius:0;margin-bottom:5px}
+.drop-zone{border:2px dashed var(--border);border-radius:0;padding:32px 20px;text-align:center;cursor:pointer;background:#050505;position:relative;overflow:hidden}
 .step-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:20px}
 @media(min-width:500px){.step-grid{grid-template-columns:repeat(5,1fr)}}
 .fade-in{animation:fi .2s ease}
@@ -164,12 +165,6 @@ var state = {
   txnHistFile: null,    // name of uploaded transaction history file
   txnHistTxns: [],      // parsed transaction history rows
   txnHistError: null,
-  ghToken: (function(){try{return localStorage.getItem('gh_token')||'';}catch(e){return '';}}()),
-  ghRepo: (function(){try{return localStorage.getItem('gh_repo')||'';}catch(e){return '';}}()),
-  ghBranch: (function(){try{return localStorage.getItem('gh_branch')||'main';}catch(e){return 'main';}}()),
-  ghDeploying: false,
-  ghDeployStatus: null,
-  ghDeployMsg: '',
   vdax: {},
   vdaxLoading: false,
   vdaxError: null,
@@ -520,7 +515,7 @@ function render(){
 
   // Nav
   var navEl=document.getElementById('nav');
-  var navItems=[['dashboard','OVERVIEW'],['positions','POSITIONS'],['analytics','ANALYTICS'],['ideas','IDEAS'],['market','EUREX'],['import','⬆ DEGIRO'],['github','☁ DEPLOY'],['add','+ NEW']];
+  var navItems=[['dashboard','OVERVIEW'],['positions','POSITIONS'],['analytics','ANALYTICS'],['ideas','IDEAS'],['market','EUREX'],['import','⬆ DEGIRO'],['add','+ NEW']];
   navEl.innerHTML=navItems.map(function(item){
     var v=item[0],l=item[1];
     var cls='navbtn';
@@ -551,7 +546,6 @@ function render(){
         esc(e.message)+'<br>'+esc((e.stack||'').split('\n').slice(0,3).join(' | '))+'</div>';
     }
   }
-  else if(state.view==='github') html+=renderGitHub();
   else if(state.view==='ideas'){
     try{ html+=renderIdeas(); }
     catch(e){
@@ -590,10 +584,10 @@ function renderDashboard(){
   var riskColor=portfolioRisk<0?'var(--red)':portfolioRisk===0?'var(--muted)':'var(--accent)';
 
   var metrics=[
-    {l:'OPEN P&amp;L',v:fmtE(totalPnL),c:totalPnL>=0?'var(--accent)':'var(--red)',s:openPos.length+' open positions'},
+    {l:'OPEN P&amp;L',v:fmtE(totalPnL),c:totalPnL>=0?'var(--green)':'var(--red)',s:openPos.length+' open positions'},
     {l:'OPEN POSITIONS',v:openPos.length,c:'var(--text)',s:state.positions.length+' total trades'},
     {l:'WIN RATE',v:winRate,c:'var(--yellow)',s:winners+'/'+closedPos.length+' closed'},
-    {l:'REALIZED P&amp;L',v:fmtE(realPnL),c:realPnL>=0?'var(--accent)':'var(--red)',s:'closed positions'},
+    {l:'REALIZED P&amp;L',v:fmtE(realPnL),c:realPnL>=0?'var(--green)':'var(--red)',s:'closed positions'},
   ];
 
   var riskHtml=openPos.length===0?'':
@@ -725,8 +719,8 @@ function renderDetail(){
   var pnl=calcPnL(pos);
 
   var metrics=[
-    {l:'TOTAL P&amp;L',v:fmtE(pnl.totalPnL),c:pnl.totalPnL>=0?'var(--accent)':'var(--red)'},
-    {l:'P&amp;L %',v:fmtPct(pnl.pct),c:pnl.pct>=0?'var(--accent)':'var(--red)'},
+    {l:'TOTAL P&amp;L',v:fmtE(pnl.totalPnL),c:pnl.totalPnL>=0?'var(--green)':'var(--red)'},
+    {l:'P&amp;L %',v:fmtPct(pnl.pct),c:pnl.pct>=0?'var(--green)':'var(--red)'},
     {l:'CONTRACTS',v:pos.contracts,c:'var(--text)'},
     {l:'OPENED',v:pos.openDate,c:'var(--yellow)'},
   ];
@@ -980,12 +974,12 @@ function renderAnalytics(){
   var avgDays = cp.reduce(function(s,p){return s+p.daysHeld;},0)/cp.length;
 
   var summaryHtml = [
-    {l:'REALIZED NET P&L', v:fmtE(totalNet), c:totalNet>=0?'var(--accent)':'var(--red)', s:cp.length+' closed positions'},
+    {l:'REALIZED NET P&L', v:fmtE(totalNet), c:totalNet>=0?'var(--green)':'var(--red)', s:cp.length+' closed positions'},
     {l:'WIN RATE', v:Math.round(winners.length/cp.length*100)+'%', c:'var(--yellow)', s:winners.length+' winners / '+losers.length+' losers'},
     {l:'AVG DECAY CAPTURE', v:avgCapture!=null?Math.round(avgCapture)+'%':'--', c:'var(--accent)', s:'short positions only'},
     {l:'TOTAL COSTS PAID', v:fmtE(totalCosts), c:'var(--red)', s:'transaction fees'},
     (function(){ var vs=vdaxSummaryStats(); return {l:'AVG VDAX AT ENTRY', v:vs.avgIVAtEntry!=null?vs.avgIVAtEntry.toFixed(1):'--', c:'var(--text)', s:vs.positionsWithData+' positions'}; })(),
-    (function(){ var vs=vdaxSummaryStats(); return {l:'AVG IV RANK', v:vs.avgIVRank!=null?vs.avgIVRank+'%':'--', c:vs.avgIVRank!=null&&vs.avgIVRank>=75?'var(--accent)':vs.avgIVRank!=null&&vs.avgIVRank>=50?'var(--yellow)':'var(--red)', s:'at entry, 52-week'}; })(),
+    (function(){ var vs=vdaxSummaryStats(); return {l:'AVG IV RANK', v:vs.avgIVRank!=null?vs.avgIVRank+'%':'--', c:vs.avgIVRank!=null&&vs.avgIVRank>=75?'var(--green)':vs.avgIVRank!=null&&vs.avgIVRank>=50?'var(--yellow)':'var(--red)', s:'at entry, 52-week'}; })(),
   ].map(function(m){
     return '<div class="card" style="position:relative;overflow:hidden">'+
       '<div class="metric-lbl">'+m.l+'</div>'+
@@ -1035,7 +1029,7 @@ function renderAnalytics(){
   var rollRows = rolls.map(function(r){
     var sellDesc = r.sells.map(function(t){return t.strike+' exp:'+fmtExpiry(t.expiry)+' @'+t.koers;}).join(', ');
     var buyDesc  = r.buys.map(function(t){ return t.strike+' exp:'+fmtExpiry(t.expiry)+' @'+t.koers;}).join(', ');
-    var creditColor = r.netCredit>=0?'var(--accent)':'var(--red)';
+    var creditColor = r.netCredit>=0?'var(--green)':'var(--red)';
     var sellExpLabel=uniqExpiries(r.sells).map(fmtExpiry).join('/');
     var buyExpLabel=uniqExpiries(r.buys).map(fmtExpiry).join('/');
     var expiryLabel=sellExpLabel===buyExpLabel?sellExpLabel:sellExpLabel+' &rarr; '+buyExpLabel;
@@ -1080,7 +1074,7 @@ function renderAnalytics(){
       '<td style="color:var(--accent);font-weight:600">'+longStrike+'</td>'+
       '<td style="font-weight:600">'+width+'</td>'+
       '<td>'+fmtE(maxRisk)+'</td>'+
-      '<td style="color:'+(netCredit>=0?'var(--accent)':'var(--red)')+';font-weight:600">'+fmtE(netCredit)+'</td>'+
+      '<td style="color:'+(netCredit>=0?'var(--green)':'var(--red)')+';font-weight:600">'+fmtE(netCredit)+'</td>'+
       '<td style="color:var(--muted);font-size:11px">'+Math.round(creditPct)+'% of width</td>'+
     '</tr>';
   }).join('');
@@ -1117,7 +1111,7 @@ function renderAnalytics(){
     .sort(function(a,b){return b.captureRate-a.captureRate;})
     .map(function(p){
       var barW = Math.max(0,Math.min(100,p.captureRate));
-      var barColor = p.captureRate>=50?'var(--accent)':p.captureRate>=0?'var(--yellow)':'var(--red)';
+      var barColor = p.captureRate>=50?'var(--green)':p.captureRate>=0?'var(--yellow)':'var(--red)';
       return '<tr>'+
         '<td style="color:var(--muted);font-size:11px">'+p.openDate+'</td>'+
         '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
@@ -1169,7 +1163,7 @@ function renderMarket(){
     inner=renderEurexDetail();
   } else {
     var chips=['ODAX','OESX','FGBL','OGBL','OSMI'].map(function(id){
-      return '<button class="btn-ghost" style="border-radius:20px;padding:3px 12px;font-size:11px;color:var(--accent);border-color:rgba(0,229,180,.2);background:var(--accentD)" data-eurex-chip="'+id+'">'+id+'</button>';
+      return '<button class="btn-ghost" style="border-radius:20px;padding:3px 12px;font-size:11px;color:var(--accent);border-color:rgba(255,159,10,.2);background:var(--accentD)" data-eurex-chip="'+id+'">'+id+'</button>';
     }).join('');
 
     var results='';
@@ -1235,7 +1229,7 @@ function renderEurexDetail(){
       var list=byExpiry[exp];
       var calls=list.filter(function(c){return c.callPutFlag==='C';}).sort(function(a,b){return a.strikePrice-b.strikePrice;});
       var puts=list.filter(function(c){return c.callPutFlag==='P';}).sort(function(a,b){return a.strikePrice-b.strikePrice;});
-      var callBadges=calls.slice(0,8).map(function(c){return '<span style="background:rgba(0,229,180,.08);color:var(--accent);border:1px solid rgba(0,229,180,.15);border-radius:4px;padding:2px 7px;font-size:11px">'+c.strikePrice+'</span>';}).join(' ');
+      var callBadges=calls.slice(0,8).map(function(c){return '<span style="background:rgba(255,159,10,.08);color:var(--accent);border:1px solid rgba(255,159,10,.15);border-radius:4px;padding:2px 7px;font-size:11px">'+c.strikePrice+'</span>';}).join(' ');
       if(calls.length>8) callBadges+='<span style="color:var(--muted);font-size:11px">+'+( calls.length-8)+'</span>';
       var putBadges=puts.slice(0,8).map(function(c){return '<span style="background:rgba(255,69,96,.08);color:var(--red);border:1px solid rgba(255,69,96,.15);border-radius:4px;padding:2px 7px;font-size:11px">'+c.strikePrice+'</span>';}).join(' ');
       if(puts.length>8) putBadges+='<span style="color:var(--muted);font-size:11px">+'+( puts.length-8)+'</span>';
@@ -1363,7 +1357,7 @@ function renderImport(){
         '</div>'+
       '</div>'+
       (state.txnHistFile?
-        '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0a0c10;border:1px solid rgba(0,229,180,.25);border-radius:8px">'+
+        '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0a0c10;border:1px solid rgba(255,159,10,.25);border-radius:8px">'+
           '<span style="color:var(--accent);font-size:16px">✓</span>'+
           '<div style="flex:1">'+
             '<div style="font-size:12px;font-weight:600;color:var(--accent)">'+esc(state.txnHistFile)+'</div>'+
@@ -1463,7 +1457,7 @@ function renderImportPreview(){
     posHtml='<div style="font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">DETECTED OPTION POSITIONS — tap to select</div>';
     posHtml+=poss.map(function(pos){
       var checked=!!state.importSelected[pos.id];
-      return '<div class="pos-row row-click" style="border-color:'+(checked?'rgba(0,229,180,.3)':'var(--border)')+';margin-bottom:8px" data-toggle-import="'+pos.id+'">'+
+      return '<div class="pos-row row-click" style="border-color:'+(checked?'rgba(255,159,10,.3)':'var(--border)')+';margin-bottom:8px" data-toggle-import="'+pos.id+'">'+
         '<div style="display:flex;align-items:center;gap:12px">'+
           '<div style="width:18px;height:18px;border-radius:4px;border:2px solid '+(checked?'var(--accent)':'var(--muted)')+';background:'+(checked?'var(--accent)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+
             (checked?'<span style="color:#000;font-size:12px;font-weight:900">✓</span>':'')+
@@ -1571,7 +1565,7 @@ function renderAdd(){
       '<div class="card" style="margin-bottom:14px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">'+
           '<span style="font-family:var(--display);font-weight:700;font-size:13px">Legs ('+(state.newLegs||[]).length+')</span>'+
-          '<button class="btn-ghost" style="color:var(--accent);border-color:rgba(0,229,180,.2);background:var(--accentD);font-size:11px" id="btn-open-leg-form">+ ADD LEG</button>'+
+          '<button class="btn-ghost" style="color:var(--accent);border-color:rgba(255,159,10,.2);background:var(--accentD);font-size:11px" id="btn-open-leg-form">+ ADD LEG</button>'+
         '</div>'+
         legForm+
         (legsHtml||'<div style="color:var(--muted);font-size:11px">No legs yet</div>')+
@@ -1604,115 +1598,6 @@ function downloadSelf(){
   } else {
     alert('Pop-up blocked. Please allow pop-ups for this page and try again.');
   }
-}
-
-// --- GitHub Deploy View -------------------------------------------------------
-function renderGitHub(){
-  var st = state.ghDeployStatus;
-  var statusHtml = '';
-  if(state.ghDeploying){
-    statusHtml = '<div style="margin-top:16px;padding:14px;background:var(--surface);border-radius:8px;color:var(--yellow);font-size:12px">Deploying to GitHub Pages...</div>';
-  } else if(st==='ok'){
-    statusHtml = '<div style="margin-top:16px;padding:14px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:8px">'+
-      '<div style="color:var(--accent);font-weight:700;margin-bottom:4px">&#x2713; Deployed successfully</div>'+
-      '<div style="color:var(--muted);font-size:12px">'+esc(state.ghDeployMsg)+'</div>'+
-      '<div style="color:var(--muted);font-size:11px;margin-top:6px">GitHub Pages can take 1-2 minutes to update</div></div>';
-  } else if(st==='error'){
-    statusHtml = '<div style="margin-top:16px;padding:14px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px">'+
-      '<div style="color:var(--red);font-weight:700;margin-bottom:4px">&#x2717; Deploy failed</div>'+
-      '<div style="color:var(--muted);font-size:12px">'+esc(state.ghDeployMsg)+'</div></div>';
-  }
-
-  var isLocal = (location.protocol === 'file:');
-  var localWarning = isLocal ?
-    '<div style="padding:12px 16px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;margin-bottom:16px">'+
-      '<div style="color:var(--yellow);font-weight:700;font-size:12px;margin-bottom:4px">&#x26A0; Running from local file</div>'+
-      '<div style="color:var(--muted);font-size:11px;line-height:1.6">'+
-      'GitHub API cannot be called from a local file (CORS policy). '+
-      'Deploy works once you open this tool from your live GitHub Pages URL. '+
-      'For the first upload, use the GitHub web UI to upload index.html manually.</div></div>' : '';
-
-  return '<div class="section-title">Deploy to GitHub</div>'+
-    '<div style="color:var(--muted);font-size:11px;margin-bottom:20px">Push index.html to your GitHub Pages repository</div>'+
-    localWarning+
-    '<div class="card" style="margin-bottom:16px">'+
-      '<div style="font-family:var(--display);font-weight:700;font-size:14px;margin-bottom:16px">GitHub Settings</div>'+
-      '<div class="form-field" style="margin-bottom:14px">'+
-        '<label class="form-label">PERSONAL ACCESS TOKEN</label>'+
-        '<input id="gh-token" type="password" placeholder="github_pat_xxxx" value="'+esc(state.ghToken)+'" '+
-          'style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:6px;font-family:var(--mono);font-size:12px"/>'+
-        '<div style="color:var(--muted);font-size:10px;margin-top:5px">github.com &#x2192; Settings &#x2192; Developer settings &#x2192; Fine-grained tokens. Grant <strong>Contents: Read and Write</strong>.</div>'+
-      '</div>'+
-      '<div class="form-field" style="margin-bottom:14px">'+
-        '<label class="form-label">REPOSITORY (username/reponame)</label>'+
-        '<input id="gh-repo" type="text" placeholder="rens/optionsdesk" value="'+esc(state.ghRepo)+'" '+
-          'style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:6px;font-family:var(--mono);font-size:12px"/>'+
-      '</div>'+
-      '<div class="form-field" style="margin-bottom:20px">'+
-        '<label class="form-label">BRANCH</label>'+
-        '<input id="gh-branch" type="text" placeholder="main" value="'+esc(state.ghBranch||'main')+'" '+
-          'style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:6px;font-family:var(--mono);font-size:12px"/>'+
-      '</div>'+
-      '<button id="btn-gh-save" class="btn-ghost" style="margin-right:10px">SAVE SETTINGS</button>'+
-      '<button id="btn-gh-deploy" class="btn-accent" style="min-width:180px;padding:12px 20px"'+(state.ghDeploying?' disabled':'')+'>'+
-        (state.ghDeploying?'DEPLOYING...':'&#x2B06; DEPLOY TO GITHUB PAGES')+'</button>'+
-      statusHtml+
-    '</div>';
-}
-
-// --- GitHub Deploy API --------------------------------------------------------
-async function deployToGitHub(){
-  var token  = state.ghToken.trim();
-  var repo   = state.ghRepo.trim();
-  var branch = (state.ghBranch||'main').trim();
-
-  if(!token || !repo){
-    state.ghDeployStatus='error';
-    state.ghDeployMsg='Please fill in your GitHub token and repo (username/reponame)';
-    render(); return;
-  }
-
-  if(location.protocol==='file:'){
-    state.ghDeployStatus='error';
-    state.ghDeployMsg='Cannot deploy from a local file (CORS restriction). Open from your GitHub Pages URL first.';
-    render(); return;
-  }
-
-  state.ghDeploying=true; state.ghDeployStatus=null; render();
-
-  try{
-    var apiBase='https://api.github.com/repos/'+repo+'/contents/index.html';
-    var sha=null;
-    try{
-      var getResp=await fetch(apiBase+'?ref='+branch,{
-        headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}
-      });
-      if(getResp.ok){ var existing=await getResp.json(); sha=existing.sha; }
-    }catch(e){}
-
-    var b64=btoa(unescape(encodeURIComponent(document.documentElement.outerHTML)));
-    var body={message:'OptionsDesk update '+new Date().toISOString().slice(0,16).replace('T',' '),content:b64,branch:branch};
-    if(sha) body.sha=sha;
-
-    var putResp=await fetch(apiBase,{
-      method:'PUT',
-      headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify(body)
-    });
-
-    if(putResp.ok){
-      state.ghDeployStatus='ok';
-      state.ghDeployMsg='Live at https://'+repo.split('/')[0]+'.github.io/'+repo.split('/')[1];
-    } else {
-      var err=await putResp.json();
-      state.ghDeployStatus='error';
-      state.ghDeployMsg='GitHub error: '+(err.message||putResp.status);
-    }
-  }catch(e){
-    state.ghDeployStatus='error';
-    state.ghDeployMsg='Network error: '+e.message;
-  }
-  state.ghDeploying=false; render();
 }
 
 
@@ -1897,9 +1782,9 @@ function renderVdaxCard(pos){
   var crush=vdaxIVCrush(pos);
   var crushPct=vdaxIVCrushPct(pos);
   var current=state.vdaxMeta?state.vdaxMeta.latest:null;
-  var rankColor=rank==null?'var(--muted)':rank>=75?'var(--accent)':rank>=50?'var(--yellow)':'var(--red)';
+  var rankColor=rank==null?'var(--muted)':rank>=75?'var(--green)':rank>=50?'var(--yellow)':'var(--red)';
   var rankLabel=rank!=null?rank+'%':'--';
-  var crushColor=crush==null?'var(--muted)':crush<0?'var(--accent)':'var(--red)';
+  var crushColor=crush==null?'var(--muted)':crush<0?'var(--green)':'var(--red)';
   var crushStr=crush!=null?(crush>=0?'+':'')+crush+' pts ('+(crushPct>=0?'+':'')+crushPct+'%)':'--';
   return '<div class="card" style="margin-top:12px">'+
     '<div style="font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:12px">VDAX-NEW &middot; IMPLIED VOLATILITY CONTEXT</div>'+
@@ -1934,8 +1819,8 @@ function renderVdaxAnalyticsRow(pos){
   var entry=vdaxAtEntry(pos);
   var rank=vdaxIVRank(pos);
   var crush=vdaxIVCrush(pos);
-  var rankColor=rank==null?'var(--muted)':rank>=75?'var(--accent)':rank>=50?'var(--yellow)':'var(--red)';
-  var crushColor=crush==null?'var(--muted)':crush<0?'var(--accent)':'var(--red)';
+  var rankColor=rank==null?'var(--muted)':rank>=75?'var(--green)':rank>=50?'var(--yellow)':'var(--red)';
+  var crushColor=crush==null?'var(--muted)':crush<0?'var(--green)':'var(--red)';
   return '<td style="font-family:var(--mono)">'+(entry!=null?entry.toFixed(1):'--')+'</td>'+
     '<td style="color:'+rankColor+';font-family:var(--mono)">'+(rank!=null?rank+'%':'--')+'</td>'+
     '<td style="color:'+crushColor+';font-family:var(--mono)">'+(crush!=null?(crush>=0?'+':'')+crush:'--')+'</td>';
@@ -2138,26 +2023,6 @@ function bindEvents(){
 
   var btnIA=document.getElementById('btn-import-again');
   if(btnIA) btnIA.addEventListener('click',function(){state.importStep='idle';state.importError=null;render();});
-
-  var btnGhSave=document.getElementById('btn-gh-save');
-  if(btnGhSave) btnGhSave.addEventListener('click',function(){
-    var tok=(document.getElementById('gh-token')||{}).value||'';
-    var repo=(document.getElementById('gh-repo')||{}).value||'';
-    var branch=(document.getElementById('gh-branch')||{}).value||'main';
-    state.ghToken=tok; state.ghRepo=repo; state.ghBranch=branch;
-    try{localStorage.setItem('gh_token',tok);localStorage.setItem('gh_repo',repo);localStorage.setItem('gh_branch',branch);}catch(e){}
-    state.ghDeployStatus='ok'; state.ghDeployMsg='Settings saved.'; render();
-  });
-
-  var btnGhDeploy=document.getElementById('btn-gh-deploy');
-  if(btnGhDeploy) btnGhDeploy.addEventListener('click',function(){
-    var tok=(document.getElementById('gh-token')||{}).value||state.ghToken;
-    var repo=(document.getElementById('gh-repo')||{}).value||state.ghRepo;
-    var branch=(document.getElementById('gh-branch')||{}).value||state.ghBranch||'main';
-    state.ghToken=tok; state.ghRepo=repo; state.ghBranch=branch;
-    try{localStorage.setItem('gh_token',tok);localStorage.setItem('gh_repo',repo);localStorage.setItem('gh_branch',branch);}catch(e){}
-    deployToGitHub();
-  });
 
   var btnPB=document.getElementById('btn-preview-back');
   var btnPB2=document.getElementById('btn-preview-back2');
