@@ -106,6 +106,17 @@ var fmtPct = function(n){
 };
 var pcClass = function(n){ return n>=0?'pos-green':'pos-red'; };
 var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+var MONTH_ABBR=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+// Formats an ISO date (YYYY-MM-DD) as e.g. "17 JUL '26" -- the numeric month in a
+// raw ISO string is easy to miss at a glance, so the month is always spelled out.
+var fmtExpiry = function(iso){
+  if(!iso) return '—';
+  var parts=String(iso).split('-');
+  if(parts.length!==3) return iso;
+  var mIdx=parseInt(parts[1],10)-1;
+  var mon=MONTH_ABBR[mIdx]||parts[1];
+  return parseInt(parts[2],10)+' '+mon+' \''+parts[0].slice(2);
+};
 
 // P&L formula: sign * (currentPremium - entryPremium) * netContracts * 5
 // - sign: +1 for BUY, -1 for SELL
@@ -485,8 +496,25 @@ function eurexQuery(query,variables,callback){
   xhr.send(JSON.stringify({query:query,variables:variables||{}}));
 }
 
+// Positions are grouped by ticker+expiry (see groupIntoPositions), so all legs in a
+// position share one expiry. Nothing auto-transitions status by date on import/add,
+// so a position stays 'Open' forever unless the user manually closes it -- this sweep
+// flips any 'Open' position whose expiry has passed to 'Expired' so it drops out of
+// open-position/open-P&L aggregates instead of lingering as if still live.
+function sweepExpiredPositions(){
+  var today=new Date().toISOString().split('T')[0];
+  state.positions.forEach(function(pos){
+    var expiry=pos.legs&&pos.legs.length?pos.legs[0].expiry:null;
+    if(pos.status==='Open'&&expiry&&expiry<today){
+      pos.status='Expired';
+      if(!pos.closeDate) pos.closeDate=expiry;
+    }
+  });
+}
+
 // --- Render -------------------------------------------------------------------
 function render(){
+  sweepExpiredPositions();
   document.getElementById('hdr-date').textContent=new Date().toLocaleDateString('en-DE',{weekday:'short',day:'numeric',month:'short'});
   document.getElementById('hdr-degiro').style.display=state.positions.some(function(p){return p.source==='degiro';})&&state.positions.length>0?'inline':'none';
 
@@ -600,11 +628,17 @@ function renderDashboard(){
       '</div>';
   }).join('');
 
-  var rows=openPos.map(function(pos){
+  var rows=openPos.slice().sort(function(a,b){
+    var ea=(a.legs&&a.legs[0]&&a.legs[0].expiry)||'';
+    var eb=(b.legs&&b.legs[0]&&b.legs[0].expiry)||'';
+    return ea.localeCompare(eb); // soonest expiry first
+  }).map(function(pos){
     var pnl=calcPnL(pos);
+    var expiry=pos.legs&&pos.legs[0]?pos.legs[0].expiry:null;
     return '<tr class="row-click" data-posid="'+pos.id+'" data-goto="detail">'+
       '<td style="font-family:var(--display);font-weight:700;color:var(--accent)">'+esc(pos.ticker)+'</td>'+
       '<td style="color:var(--muted);font-size:11px">'+esc(pos.type)+'</td>'+
+      '<td style="color:var(--yellow);font-size:11px;white-space:nowrap">'+esc(fmtExpiry(expiry))+'</td>'+
       '<td><span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+( pos.source==='degiro'?'DeGiro':'Manual')+'</span></td>'+
       '<td style="color:var(--muted)">'+pos.legs.length+'</td>'+
       '<td>'+pos.contracts+'</td>'+
@@ -623,7 +657,7 @@ function renderDashboard(){
         '<button class="btn-ghost" style="font-size:11px" data-goto="positions">ALL →</button>'+
       '</div>'+
       '<div style="overflow-x:auto"><table class="tbl">'+
-        '<thead><tr><th>PRODUCT</th><th>STRATEGY</th><th>SOURCE</th><th>LEGS</th><th>CTR</th><th>P&amp;L</th><th>RETURN</th></tr></thead>'+
+        '<thead><tr><th>PRODUCT</th><th>STRATEGY</th><th>EXPIRY</th><th>SOURCE</th><th>LEGS</th><th>CTR</th><th>P&amp;L</th><th>RETURN</th></tr></thead>'+
         '<tbody>'+rows+'</tbody>'+
       '</table></div>'+
     '</div>'+
@@ -644,6 +678,11 @@ function renderDashboard(){
 // --- Positions ----------------------------------------------------------------
 function renderPositions(){
   var filtered=state.filter==='All'?state.positions:state.positions.filter(function(p){return p.status===state.filter;});
+  filtered=filtered.slice().sort(function(a,b){
+    var ea=(a.legs&&a.legs[0]&&a.legs[0].expiry)||'';
+    var eb=(b.legs&&b.legs[0]&&b.legs[0].expiry)||'';
+    return eb.localeCompare(ea); // nearest/most-recent expiry first
+  });
   var pills=['All','Open','Closed','Expired'].map(function(f){
     return '<button class="fpill'+(state.filter===f?' on':'')+'" data-filter="'+f+'">'+f+'</button>';
   }).join('');
@@ -651,6 +690,7 @@ function renderPositions(){
   var rows=filtered.map(function(pos){
     var pnl=calcPnL(pos);
     var sc=pos.status==='Open'?'badge-accent':pos.status==='Expired'?'badge-red':'badge-muted';
+    var expiry=pos.legs&&pos.legs[0]?pos.legs[0].expiry:null;
     return '<div class="pos-row row-click" data-posid="'+pos.id+'" data-goto="detail">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
         '<span style="font-family:var(--display);font-weight:700;color:var(--accent);font-size:15px">'+esc(pos.ticker)+'</span>'+
@@ -660,6 +700,7 @@ function renderPositions(){
         '<span>'+esc(pos.type)+'</span>'+
         '<span>·</span><span>'+pos.legs.length+' legs</span>'+
         '<span>·</span><span>'+pos.contracts+'x</span>'+
+        '<span>·</span><span style="color:var(--yellow);font-weight:600">exp '+esc(fmtExpiry(expiry))+'</span>'+
         '<span class="badge '+sc+'">'+pos.status+'</span>'+
         '<span class="badge '+(pos.source==='degiro'?'badge-degiro':'badge-accent')+'">'+(pos.source==='degiro'?'DeGiro':'Manual')+'</span>'+
         '<span style="margin-left:auto" class="'+pcClass(pnl.pct)+'">'+fmtPct(pnl.pct)+'</span>'+
@@ -714,7 +755,7 @@ function renderDetail(){
       '<td><span style="color:'+(leg.action==='BUY'?'var(--accent)':'var(--red)')+';font-weight:700">'+leg.action+'</span></td>'+
       '<td>'+esc(leg.optType)+'</td>'+
       '<td style="font-weight:600">'+leg.strike+'</td>'+
-      '<td style="color:var(--muted);font-size:11px">'+esc(leg.expiry||'—')+'</td>'+
+      '<td style="color:var(--yellow);font-size:11px;white-space:nowrap">'+esc(fmtExpiry(leg.expiry))+'</td>'+
       '<td>'+entryCell+'</td>'+
       '<td>'+currCell+'</td>'+
       '<td class="'+pcClass(lp)+'">'+fmtE(lp)+'</td>'+
@@ -747,7 +788,7 @@ function renderDetail(){
         return '<div style="margin-bottom:12px">'+
           '<div style="font-size:11px;font-weight:600;margin-bottom:6px">'+
             '<span style="color:'+(leg.action==='BUY'?'var(--accent)':'var(--red)')+'">'+leg.action+'</span>'+
-            ' '+leg.optType+' '+leg.strike+' ('+leg.expiry+')'+
+            ' '+leg.optType+' '+leg.strike+' ('+fmtExpiry(leg.expiry)+')'+
             (leg.txnMatched?' <span style="color:var(--accent);font-size:9px;background:var(--accentD);padding:1px 6px;border-radius:3px">VWAP entry used</span>':'')+
           '</div>'+
           '<table class="tbl" style="font-size:11px">'+
@@ -965,7 +1006,7 @@ function renderAnalytics(){
       '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
       '<td>'+badge+'</td>'+
       '<td style="font-size:11px">'+p.optType+' '+p.strike+'</td>'+
-      '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+      '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+fmtExpiry(p.expiry)+'</td>'+
       '<td>'+p.matchedQty+'x</td>'+
       '<td>'+fmtE(p.openPrice)+'</td>'+
       '<td>'+fmtE(p.closePrice)+'</td>'+
@@ -986,14 +1027,23 @@ function renderAnalytics(){
   '</div>';
 
   // ── 3. Roll analysis ──
+  function uniqExpiries(arr){
+    var seen={},out=[];
+    arr.forEach(function(t){ if(!seen[t.expiry]){seen[t.expiry]=1;out.push(t.expiry);} });
+    return out;
+  }
   var rollRows = rolls.map(function(r){
-    var sellDesc = r.sells.map(function(t){return t.strike+' exp:'+t.expiry.slice(5)+' @'+t.koers;}).join(', ');
-    var buyDesc  = r.buys.map(function(t){ return t.strike+' exp:'+t.expiry.slice(5)+' @'+t.koers;}).join(', ');
+    var sellDesc = r.sells.map(function(t){return t.strike+' exp:'+fmtExpiry(t.expiry)+' @'+t.koers;}).join(', ');
+    var buyDesc  = r.buys.map(function(t){ return t.strike+' exp:'+fmtExpiry(t.expiry)+' @'+t.koers;}).join(', ');
     var creditColor = r.netCredit>=0?'var(--accent)':'var(--red)';
+    var sellExpLabel=uniqExpiries(r.sells).map(fmtExpiry).join('/');
+    var buyExpLabel=uniqExpiries(r.buys).map(fmtExpiry).join('/');
+    var expiryLabel=sellExpLabel===buyExpLabel?sellExpLabel:sellExpLabel+' &rarr; '+buyExpLabel;
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px">'+r.date+'</td>'+
       '<td style="font-weight:700;color:var(--accent)">'+esc(r.ticker)+'</td>'+
       '<td><span style="font-size:10px;background:var(--surface);padding:2px 7px;border-radius:4px">'+esc(r.rollType)+'</span></td>'+
+      '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+expiryLabel+'</td>'+
       '<td style="font-size:11px;color:var(--red)">SELL '+sellDesc+'</td>'+
       '<td style="font-size:11px;color:var(--accent)">BUY '+buyDesc+'</td>'+
       '<td style="font-weight:700;color:'+creditColor+'">'+fmtE(r.netCredit)+'/ctr</td>'+
@@ -1005,7 +1055,7 @@ function renderAnalytics(){
     '<div style="color:var(--muted);font-size:11px;margin-bottom:14px">Same-day trades on same ticker+option type = roll or spread adjustment detected</div>'+
     (rolls.length?
       '<div style="overflow-x:auto"><table class="tbl" style="font-size:11px">'+
-        '<thead><tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>SOLD / OPENED</th><th>BOUGHT / CLOSED</th><th>NET CREDIT</th></tr></thead>'+
+        '<thead><tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>EXPIRY</th><th>SOLD / OPENED</th><th>BOUGHT / CLOSED</th><th>NET CREDIT</th></tr></thead>'+
         '<tbody>'+rollRows+'</tbody>'+
       '</table></div>':
       '<div style="color:var(--muted);font-size:12px;padding:16px 0">No rolls detected in transaction history</div>')+
@@ -1044,7 +1094,7 @@ function renderAnalytics(){
         '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
         '<td>'+p.optType+'</td>'+
         '<td style="font-weight:600">'+p.strike+'</td>'+
-        '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+        '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+fmtExpiry(p.expiry)+'</td>'+
         '<td>'+p.matchedQty+'x</td>'+
         '<td style="font-weight:600">'+fmtE(p.openPrice)+'</td>'+
         '<td class="'+pcClass(p.netPnL)+'">'+fmtE(p.netPnL)+'</td>'+
@@ -1072,7 +1122,7 @@ function renderAnalytics(){
         '<td style="color:var(--muted);font-size:11px">'+p.openDate+'</td>'+
         '<td style="font-weight:700;color:var(--accent)">'+esc(p.ticker)+'</td>'+
         '<td style="font-size:11px">'+p.optType+' '+p.strike+'</td>'+
-        '<td style="font-size:11px;color:var(--muted)">'+p.expiry+'</td>'+
+        '<td style="font-size:11px;color:var(--yellow);white-space:nowrap">'+fmtExpiry(p.expiry)+'</td>'+
         '<td>'+p.matchedQty+'x</td>'+
         '<td style="font-weight:600">'+fmtE(p.openPrice)+'</td>'+
         '<td style="font-weight:600">'+fmtE(p.closePrice)+'</td>'+
@@ -1245,7 +1295,7 @@ function renderIdeas(){
   }
 
   return '<div class="section-title">Trade Ideas</div>'+
-    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data, premiums are <b>Black-Scholes estimates</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) &mdash; not tradeable quotes. Always verify the actual premium in DEGIRO before entering.</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data. Premiums use Eurex\'s previous-day official settlement price when available (badged EUREX SETTLEMENT), and fall back to a <b>Black-Scholes estimate</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) otherwise. Settlement prices are still end-of-prior-day, not live intraday quotes &mdash; always verify the actual premium in DEGIRO before entering.</div>'+
     '<div class="card">'+spotRow+'</div>'+
     resultsHtml;
 }
@@ -1254,12 +1304,22 @@ function renderIdeaCard(idea,base){
   var newCredit=base.totalCreditOpen+idea.creditTotal;
   var newRisk=base.portfolioRisk+idea.maxRiskTotal;
   var newBestCasePnL=base.totalPnL+idea.maxProfitTotal;
+  var srcBadge=idea.pricingSource==='live'
+    ? '<span class="badge badge-accent" style="font-size:8px">EUREX SETTLEMENT</span>'
+    : idea.pricingSource==='mixed'
+      ? '<span class="badge" style="font-size:8px;background:rgba(251,191,36,.1);color:var(--yellow)">PARTLY ESTIMATED</span>'
+      : '<span class="badge badge-muted" style="font-size:8px">ESTIMATED</span>';
   return '<div class="card" style="min-width:0">'+
-    '<div style="font-family:var(--display);font-weight:800;font-size:14px;margin-bottom:2px">'+esc(idea.profile)+'</div>'+
-    '<div style="font-size:10px;color:var(--muted);margin-bottom:12px">'+esc(idea.expiry)+' &middot; '+idea.dte+' DTE</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">'+
+      '<span style="font-family:var(--display);font-weight:800;font-size:14px">'+esc(idea.profile)+'</span>'+srcBadge+
+    '</div>'+
+    '<div style="margin-bottom:12px">'+
+      '<span class="badge" style="background:rgba(251,191,36,.1);color:var(--yellow);font-size:10px;font-weight:700">EXP '+esc(fmtExpiry(idea.expiry))+'</span>'+
+      '<span style="font-size:10px;color:var(--muted)"> &middot; '+idea.dte+' DTE</span>'+
+    '</div>'+
     '<div style="font-size:12px;line-height:2;margin-bottom:10px">'+
-      '<div>SELL '+idea.contracts+'x P'+fmt(idea.shortStrike,0)+' @ ~'+fmt(idea.shortPrem,2)+'</div>'+
-      '<div>BUY '+idea.contracts+'x P'+fmt(idea.longStrike,0)+' @ ~'+fmt(idea.longPrem,2)+'</div>'+
+      '<div>SELL '+idea.contracts+'x P'+fmt(idea.shortStrike,0)+' @ ~'+fmt(idea.shortPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
+      '<div>BUY '+idea.contracts+'x P'+fmt(idea.longStrike,0)+' @ ~'+fmt(idea.longPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
       '<div style="color:var(--muted)">Width '+fmt(idea.widthPts,0)+' pts</div>'+
     '</div>'+
     '<div style="border-top:1px solid var(--border);padding-top:10px;font-size:12px;line-height:1.9">'+
@@ -1651,6 +1711,72 @@ async function deployToGitHub(){
 function pad2(n){ return n<10?'0'+n:''+n; }
 // ═══════════════════════════════════════════════════════════════════════════
 
+function applyVdaxData(lookup,source){
+  var keys=Object.keys(lookup).sort();
+  if(!keys.length) throw new Error('No VDAX data parsed');
+  var lastKey=keys[keys.length-1];
+  var vals=keys.map(function(k){return lookup[k];});
+  state.vdax=lookup;
+  state.vdaxLoading=false;
+  state.vdaxError=null;
+  state.vdaxMeta={from:keys[0],to:lastKey,count:keys.length,
+    min:Math.min.apply(null,vals),max:Math.max.apply(null,vals),
+    latest:lookup[lastKey],latestDate:lastKey,source:source};
+  render();
+}
+
+// Stooq CSV endpoint - CORS friendly, no API key needed. Primary source.
+function loadVdaxFromStooq(){
+  var url='https://stooq.com/q/d/l/?s=v1x.de&i=d';
+  return fetch(url).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }).then(function(csv){
+    // Parse CSV: Date,Open,High,Low,Close,Volume
+    var lines=csv.trim().split('\n');
+    if(lines.length<2) throw new Error('Empty response');
+    var lookup={};
+    var cutoff=new Date(Date.now()-2*365*86400*1000).toISOString().slice(0,10);
+    for(var i=1;i<lines.length;i++){
+      var cols=lines[i].split(',');
+      if(cols.length<5) continue;
+      var date=cols[0].trim();   // YYYY-MM-DD
+      var close=parseFloat(cols[4]);
+      if(!date||isNaN(close)) continue;
+      if(date<cutoff) continue; // keep last 2 years
+      lookup[date]=close;
+    }
+    if(!Object.keys(lookup).length) throw new Error('No rows parsed');
+    return lookup;
+  });
+}
+
+// Yahoo Finance chart endpoint - fallback if Stooq is unreachable/rate-limited.
+// No API key needed; unlike Yahoo's older quote APIs this one has historically
+// allowed direct browser fetches, but that could change without notice.
+function loadVdaxFromYahoo(){
+  var url='https://query1.finance.yahoo.com/v8/finance/chart/V1X.DE?range=2y&interval=1d';
+  return fetch(url).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(json){
+    var result=json&&json.chart&&json.chart.result&&json.chart.result[0];
+    if(!result) throw new Error('Unexpected response shape');
+    var ts=result.timestamp||[];
+    var closes=(result.indicators&&result.indicators.quote&&result.indicators.quote[0]&&result.indicators.quote[0].close)||[];
+    var lookup={};
+    for(var i=0;i<ts.length;i++){
+      var close=closes[i];
+      if(close==null||isNaN(close)) continue;
+      var d=new Date(ts[i]*1000);
+      var date=d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
+      lookup[date]=close;
+    }
+    if(!Object.keys(lookup).length) throw new Error('No rows parsed');
+    return lookup;
+  });
+}
+
 function loadVdax(){
   if(state.vdaxLoading) return;
   if(typeof fetch==='undefined'){
@@ -1659,45 +1785,16 @@ function loadVdax(){
   }
   state.vdaxLoading=true;
   state.vdaxError=null;
-  // Stooq CSV endpoint - CORS friendly, no API key needed
-  // Returns 2 years of daily data for V1X.DE (VDAX-NEW)
-  var url='https://stooq.com/q/d/l/?s=v1x.de&i=d';
-  fetch(url)
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      return r.text();
-    })
-    .then(function(csv){
-      // Parse CSV: Date,Open,High,Low,Close,Volume
-      var lines=csv.trim().split('\n');
-      if(lines.length<2) throw new Error('Empty VDAX data');
-      var lookup={}, vals=[];
-      // Stooq returns newest first, skip header
-      for(var i=1;i<lines.length;i++){
-        var cols=lines[i].split(',');
-        if(cols.length<5) continue;
-        var date=cols[0].trim();   // YYYY-MM-DD
-        var close=parseFloat(cols[4]);
-        if(!date||isNaN(close)) continue;
-        // Only keep last 2 years
-        if(date < new Date(Date.now()-2*365*86400*1000).toISOString().slice(0,10)) continue;
-        lookup[date]=close;
-        vals.push(close);
-      }
-      var keys=Object.keys(lookup).sort();
-      if(!keys.length) throw new Error('No VDAX data parsed');
-      var lastKey=keys[keys.length-1];
-      state.vdax=lookup;
-      state.vdaxLoading=false;
-      state.vdaxMeta={from:keys[0],to:lastKey,count:keys.length,
-        min:Math.min.apply(null,vals),max:Math.max.apply(null,vals),
-        latest:lookup[lastKey],latestDate:lastKey};
-      render();
-    })
-    .catch(function(err){
-      state.vdaxLoading=false;
-      state.vdaxError=err.message||'Failed to load VDAX data';
-      render();
+  loadVdaxFromStooq()
+    .then(function(lookup){ applyVdaxData(lookup,'Stooq'); })
+    .catch(function(stooqErr){
+      loadVdaxFromYahoo()
+        .then(function(lookup){ applyVdaxData(lookup,'Yahoo Finance'); })
+        .catch(function(yahooErr){
+          state.vdaxLoading=false;
+          state.vdaxError='Stooq: '+(stooqErr.message||'failed')+' · Yahoo: '+(yahooErr.message||'failed');
+          render();
+        });
     });
 }
 
@@ -1754,7 +1851,7 @@ function vdaxIVCrushPct(pos){
 function renderVdaxBadge(){
   if(state.vdaxLoading) return '<span style="font-size:9px;color:var(--muted);margin-left:8px">VDAX...</span>';
   if(state.vdaxError)   return '<span style="font-size:9px;color:var(--red);margin-left:8px" title="'+esc(state.vdaxError)+'" onclick="state.vdaxLoading=false;loadVdax();" style="cursor:pointer">VDAX &#x2717; (tap to retry)</span>';
-  if(state.vdaxMeta)    return '<span style="font-size:9px;color:var(--accent);margin-left:8px" title="VDAX-NEW '+state.vdaxMeta.latestDate+'">VDAX &#x2713; '+state.vdaxMeta.latest.toFixed(1)+'</span>';
+  if(state.vdaxMeta)    return '<span style="font-size:9px;color:var(--accent);margin-left:8px" title="VDAX-NEW '+state.vdaxMeta.latestDate+' via '+esc(state.vdaxMeta.source||'')+'">VDAX &#x2713; '+state.vdaxMeta.latest.toFixed(1)+'</span>';
   return '';
 }
 
@@ -1794,7 +1891,7 @@ function renderVdaxCard(pos){
         '<div style="font-size:9px;color:var(--muted)">entry &#x2192; now</div>'+
       '</div>'+
     '</div>'+
-    (state.vdaxMeta?'<div style="margin-top:10px;font-size:9px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">VDAX-NEW range: '+state.vdaxMeta.min.toFixed(1)+' - '+state.vdaxMeta.max.toFixed(1)+' &middot; '+state.vdaxMeta.count+' trading days &middot; Yahoo Finance (V1X.DE)</div>':'')+
+    (state.vdaxMeta?'<div style="margin-top:10px;font-size:9px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">VDAX-NEW range: '+state.vdaxMeta.min.toFixed(1)+' - '+state.vdaxMeta.max.toFixed(1)+' &middot; '+state.vdaxMeta.count+' trading days &middot; '+esc(state.vdaxMeta.source||'V1X.DE')+'</div>':'')+
   '</div>';
 }
 
@@ -2119,20 +2216,30 @@ function doEurexSearch(){
   if(!q) return;
   state.eurexSearch=q;state.eurexResults=[];state.eurexError=null;state.eurexSelected=null;state.eurexContracts=[];state.eurexLoading=true;
   render();
-  eurexQuery('query($id:String){Products(filter:{productId:$id}){productId productNameLong productType currency tickSize tickValue}}',{id:q},function(err,data){
+  // NOTE: root field confirmed via introspection to be "ProductInfos" (not "Products").
+  // The filter/response shape below is still an educated guess pending live verification.
+  eurexQuery('query($id:String){ProductInfos(filter:{Product:{eq:$id}}){data{Product ProductLine}}}',{id:q},function(err,data){
     state.eurexLoading=false;
     if(err){state.eurexError='API error: '+err.message;state.eurexApiOk=false;}
-    else{state.eurexResults=data.Products||[];state.eurexApiOk=true;if(!state.eurexResults.length)state.eurexError='No product found. Try: ODAX, OESX, FGBL, OGBL';}
+    else{
+      var rows=(data.ProductInfos&&data.ProductInfos.data)||[];
+      state.eurexResults=rows.map(function(r){return{productId:r.Product,productNameLong:r.ProductLine||r.Product,productType:'',currency:'EUR'};});
+      state.eurexApiOk=true;
+      if(!state.eurexResults.length)state.eurexError='No product found. Try: ODAX, OESX, FGBL, OGBL';
+    }
     render();
   });
 }
 
 function doEurexContracts(productId){
-  eurexQuery('query($pid:String!){Contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:productId},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){data{ContractID ExpirationDate Strike CallPut}}}',{pid:productId},function(err,data){
     state.eurexContractsLoading=false;
     if(!err){
       var today=new Date().toISOString().split('T')[0];
-      state.eurexContracts=(data.Contracts||[]).filter(function(c){return c.expirationDate>=today;}).sort(function(a,b){return a.expirationDate.localeCompare(b.expirationDate);}).slice(0,60);
+      var rows=(data.Contracts&&data.Contracts.data)||[];
+      state.eurexContracts=rows.map(function(c){
+        return{contractId:c.ContractID,expirationDate:c.ExpirationDate,strikePrice:c.Strike,callPutFlag:c.CallPut};
+      }).filter(function(c){return c.expirationDate>=today;}).sort(function(a,b){return a.expirationDate.localeCompare(b.expirationDate);}).slice(0,60);
     }
     render();
   });
@@ -2198,7 +2305,7 @@ function loadDaxSpot(idx){
 
 function loadIdeasChain(cb){
   state.ideasChainLoading=true; state.ideasChainError=null; render();
-  eurexQuery('query($pid:String!){Contracts(filter:{productId:$pid}){contractId expirationDate strikePrice callPutFlag}}',{pid:'ODAX'},function(err,data){
+  eurexQuery('query($pid:String!){Contracts(filter:{Product:{eq:$pid}}){data{ContractID ExpirationDate Strike CallPut PreviousDaySettlementPrice OptionsDelta}}}',{pid:'ODAX'},function(err,data){
     state.ideasChainLoading=false;
     if(err){
       state.ideasChainError='Eurex API error: '+err.message;
@@ -2207,7 +2314,13 @@ function loadIdeasChain(cb){
       return;
     }
     var today=new Date().toISOString().split('T')[0];
-    state.ideasChain=(data.Contracts||[]).filter(function(c){
+    var rows=(data.Contracts&&data.Contracts.data)||[];
+    state.ideasChain=rows.map(function(c){
+      return{
+        contractId:c.ContractID, expirationDate:c.ExpirationDate, strikePrice:c.Strike,
+        callPutFlag:c.CallPut, settlementPrice:c.PreviousDaySettlementPrice, delta:c.OptionsDelta
+      };
+    }).filter(function(c){
       return c.callPutFlag==='P' && c.expirationDate>=today;
     }).sort(function(a,b){
       return a.expirationDate===b.expirationDate?a.strikePrice-b.strikePrice:a.expirationDate.localeCompare(b.expirationDate);
@@ -2257,8 +2370,8 @@ function computeTradeIdeas(spot,ivPts){
       return Math.abs(new Date(d)-new Date(targetDateStr))<Math.abs(new Date(best)-new Date(targetDateStr))?d:best;
     },null);
     if(!expiry) return;
-    var strikesAtExpiry=state.ideasChain.filter(function(c){return c.expirationDate===expiry;})
-      .map(function(c){return c.strikePrice;}).sort(function(a,b){return a-b;});
+    var contractsAtExpiry=state.ideasChain.filter(function(c){return c.expirationDate===expiry;});
+    var strikesAtExpiry=contractsAtExpiry.map(function(c){return c.strikePrice;}).sort(function(a,b){return a-b;});
     if(strikesAtExpiry.length<2) return;
     var T=Math.max((new Date(expiry)-today)/86400000,1)/365;
     var targetShort=spot*(1-profile.kSigma*sigma*Math.sqrt(T));
@@ -2267,8 +2380,12 @@ function computeTradeIdeas(spot,ivPts){
     if(!lowerStrikes.length) return;
     var targetLong=shortStrike-profile.widthPts;
     var longStrike=lowerStrikes.reduce(function(best,s){return Math.abs(s-targetLong)<Math.abs(best-targetLong)?s:best;},lowerStrikes[0]);
-    var shortPrem=bsPut(spot,shortStrike,T,r,sigma);
-    var longPrem=bsPut(spot,longStrike,T,r,sigma);
+    var shortContract=contractsAtExpiry.filter(function(c){return c.strikePrice===shortStrike;})[0];
+    var longContract=contractsAtExpiry.filter(function(c){return c.strikePrice===longStrike;})[0];
+    var shortIsLive=!!(shortContract&&shortContract.settlementPrice!=null&&shortContract.settlementPrice>0);
+    var longIsLive=!!(longContract&&longContract.settlementPrice!=null&&longContract.settlementPrice>0);
+    var shortPrem=shortIsLive?shortContract.settlementPrice:bsPut(spot,shortStrike,T,r,sigma);
+    var longPrem=longIsLive?longContract.settlementPrice:bsPut(spot,longStrike,T,r,sigma);
     var creditPts=shortPrem-longPrem;
     if(creditPts<=0) return;
     var widthPts=shortStrike-longStrike;
@@ -2281,6 +2398,7 @@ function computeTradeIdeas(spot,ivPts){
       profile:profile.name, expiry:expiry, dte:Math.round((new Date(expiry)-today)/86400000),
       shortStrike:shortStrike, longStrike:longStrike, widthPts:widthPts, contracts:contracts,
       shortPrem:shortPrem, longPrem:longPrem, creditPts:creditPts,
+      pricingSource:(shortIsLive&&longIsLive)?'live':(shortIsLive||longIsLive)?'mixed':'estimate',
       creditTotal:creditPts*MULTIPLIER*contracts,
       maxRiskTotal:maxRiskEURPerContract*contracts,
       maxProfitTotal:creditPts*MULTIPLIER*contracts,
