@@ -48,12 +48,18 @@ in chat), the method is the same:
 2. Generate candidates for **three strategies** — Bull Put Spread (credit),
    Bear Put Spread (debit), Bull Call Spread (debit) — each with 3 profiles
    (Conservative/Balanced/Aggressive) that vary by **DTE and width** (not a
-   fixed OTM%), using a vol-scaled strike offset from spot:
+   fixed OTM%). By default the near strike uses a vol-scaled offset from spot:
    `nearStrike ≈ spot * (1 + dirSign * kSigma * IV * sqrt(T))` (dirSign is -1
    for puts/below spot, +1 for calls/above spot) — this keeps strikes
    realistic across different vol/DTE combos instead of producing
    near-worthless or absurdly risky spreads. See `STRATEGY_SPECS` and
    `IDEA_PROFILES` in `index.html` for the current parameters.
+   If a **target delta %** is given (optional input, e.g. "15" for a 15-delta
+   strike), the near strike is instead picked by matching that delta —
+   preferring each contract's real Eurex `OptionsDelta` when present, else a
+   Black-Scholes delta (`bsDeltaAbs()`) — applied uniformly across all three
+   profiles for that generation (they still differ by DTE/width, so the
+   resulting strikes still differ per profile even at the same target delta).
    Bear Put Spread reuses the *exact same two strikes* as Bull Put Spread —
    it's the mirror position (buy/sell legs swapped) on the same put pair, not
    a separately-selected spread. Bull Call Spread needs the call side of the
