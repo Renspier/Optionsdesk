@@ -1280,7 +1280,7 @@ function renderIdeas(){
     '</div>'+
     (state.ideasSpotError?'<div style="color:var(--red);font-size:11px;margin-bottom:10px">'+esc(state.ideasSpotError)+'</div>':'')+
     '<button class="btn-accent" id="btn-ideas-generate" style="width:100%;padding:12px">'+
-      (state.ideasChainLoading?'FETCHING ODAX CHAIN…':'GENERATE 3 TRADE IDEAS')+
+      (state.ideasChainLoading?'FETCHING ODAX CHAIN…':'GENERATE TRADE IDEAS')+
     '</button>'+
     (state.ideasChainError?'<div style="color:var(--red);font-size:11px;margin-top:8px">'+esc(state.ideasChainError)+'</div>':'')+
     (state.ideasGenError?'<div style="color:var(--red);font-size:11px;margin-top:8px">'+esc(state.ideasGenError)+'</div>':'');
@@ -1288,20 +1288,25 @@ function renderIdeas(){
   var resultsHtml='';
   if(state.ideasResults.length){
     var base=portfolioBaseline();
-    resultsHtml='<div class="section-title" style="margin-top:24px;font-size:16px">3 Bull Put Spread Ideas</div>'+
-      '<div class="two-col" style="grid-template-columns:1fr 1fr 1fr;display:grid;gap:12px">'+
-        state.ideasResults.map(function(idea){return renderIdeaCard(idea,base);}).join('')+
-      '</div>';
+    resultsHtml=STRATEGY_SPECS.map(function(spec){
+      var ideas=state.ideasResults.filter(function(idea){return idea.strategy===spec.key;});
+      if(!ideas.length) return '';
+      return '<div class="section-title" style="margin-top:24px;font-size:16px">'+esc(spec.label)+'s <span style="font-size:11px;color:var(--muted);font-weight:400">('+(spec.isCredit?'credit':'debit')+' spread)</span></div>'+
+        '<div class="two-col" style="grid-template-columns:1fr 1fr 1fr;display:grid;gap:12px">'+
+          ideas.map(function(idea){return renderIdeaCard(idea,base);}).join('')+
+        '</div>';
+    }).join('');
   }
 
   return '<div class="section-title">Trade Ideas</div>'+
-    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data. Premiums use Eurex\'s previous-day official settlement price when available (badged EUREX SETTLEMENT), and fall back to a <b>Black-Scholes estimate</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) otherwise. Settlement prices are still end-of-prior-day, not live intraday quotes &mdash; always verify the actual premium in DEGIRO before entering.</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread, bear put spread, and bull call spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data. Premiums use Eurex\'s previous-day official settlement price when available (badged EUREX SETTLEMENT), and fall back to a <b>Black-Scholes estimate</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) otherwise. Settlement prices are still end-of-prior-day, not live intraday quotes &mdash; always verify the actual premium in DEGIRO before entering.</div>'+
     '<div class="card">'+spotRow+'</div>'+
     resultsHtml;
 }
 
 function renderIdeaCard(idea,base){
-  var newCredit=base.totalCreditOpen+idea.creditTotal;
+  var netFlowSigned=idea.isCredit?idea.netFlowTotal:-idea.netFlowTotal;
+  var newCredit=base.totalCreditOpen+netFlowSigned;
   var newRisk=base.portfolioRisk+idea.maxRiskTotal;
   var newBestCasePnL=base.totalPnL+idea.maxProfitTotal;
   var srcBadge=idea.pricingSource==='live'
@@ -1318,13 +1323,18 @@ function renderIdeaCard(idea,base){
       '<span style="font-size:10px;color:var(--muted)"> &middot; '+idea.dte+' DTE</span>'+
     '</div>'+
     '<div style="font-size:12px;line-height:2;margin-bottom:10px">'+
-      '<div>SELL '+idea.contracts+'x P'+fmt(idea.shortStrike,0)+' @ ~'+fmt(idea.shortPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
-      '<div>BUY '+idea.contracts+'x P'+fmt(idea.longStrike,0)+' @ ~'+fmt(idea.longPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
+      '<div>'+idea.nearAction+' '+idea.contracts+'x '+idea.optType+fmt(idea.nearStrike,0)+' @ ~'+fmt(idea.nearPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
+      '<div>'+idea.farAction+' '+idea.contracts+'x '+idea.optType+fmt(idea.farStrike,0)+' @ ~'+fmt(idea.farPrem,2)+' <span style="color:var(--muted);font-size:10px">('+esc(fmtExpiry(idea.expiry))+')</span></div>'+
       '<div style="color:var(--muted)">Width '+fmt(idea.widthPts,0)+' pts</div>'+
     '</div>'+
     '<div style="border-top:1px solid var(--border);padding-top:10px;font-size:12px;line-height:1.9">'+
-      '<div>Net credit received: <span class="pos-green">'+fmtE(idea.creditTotal)+'</span></div>'+
-      '<div>Max risk (debit if worst case): <span class="pos-red">'+fmtE(-idea.maxRiskTotal)+'</span></div>'+
+      (idea.isCredit?
+        '<div>Net credit received: <span class="pos-green">'+fmtE(idea.netFlowTotal)+'</span></div>'+
+        '<div>Max risk (debit if worst case): <span class="pos-red">'+fmtE(-idea.maxRiskTotal)+'</span></div>'
+      :
+        '<div>Net debit paid: <span class="pos-red">'+fmtE(-idea.netFlowTotal)+'</span></div>'+
+        '<div>Max risk (the debit paid): <span class="pos-red">'+fmtE(-idea.maxRiskTotal)+'</span></div>'
+      )+
       '<div>Max profit: <span class="pos-green">'+fmtE(idea.maxProfitTotal)+'</span></div>'+
       '<div>ROI on risk: '+fmt(idea.roi,0)+'%</div>'+
       '<div>Breakeven: '+fmt(idea.breakeven,0)+' &middot; approx POP '+fmt(idea.popApprox,0)+'%</div>'+
@@ -2300,6 +2310,23 @@ function bsPut(S,K,T,r,sigma){
   var d2=d1-sigma*Math.sqrt(T);
   return K*Math.exp(-r*T)*normCdf(-d2)-S*normCdf(-d1);
 }
+// Put-call parity (q=0, DAX is a total-return index): C = P + S - K*e^(-rT)
+function bsCall(S,K,T,r,sigma){
+  if(T<=0) return Math.max(S-K,0);
+  return bsPut(S,K,T,r,sigma)+S-K*Math.exp(-r*T);
+}
+
+// Each strategy picks a "near" strike (vol-scaled OTM cushion off spot, dirSign
+// controls above/below) and a "far" strike `widthPts` further from spot, then
+// either sells the near/buys the far (credit) or buys the near/sells the far
+// (debit). Bear Put uses the exact same strikes as Bull Put -- it's the mirror
+// position on the same two puts, not a differently-selected spread. Bull Call
+// needs the call side of the chain and strikes above spot.
+var STRATEGY_SPECS=[
+  {key:'bullPut', label:'Bull Put Spread',  optType:'P', dirSign:-1, isCredit:true,  profitAbove:true},
+  {key:'bearPut', label:'Bear Put Spread',  optType:'P', dirSign:-1, isCredit:false, profitAbove:false},
+  {key:'bullCall',label:'Bull Call Spread', optType:'C', dirSign:1,  isCredit:false, profitAbove:true}
+];
 
 function loadDaxSpotFromStooq(symbol,useProxy){
   var url='https://stooq.com/q/d/l/?s='+symbol+'&i=d';
@@ -2382,11 +2409,11 @@ function loadIdeasChain(cb){
         callPutFlag:c.CallPut, settlementPrice:c.PreviousDaySettlementPrice, delta:c.OptionsDelta
       };
     }).filter(function(c){
-      return c.callPutFlag==='P' && c.expirationDate>=today;
+      return (c.callPutFlag==='P'||c.callPutFlag==='C') && c.expirationDate>=today;
     }).sort(function(a,b){
       return a.expirationDate===b.expirationDate?a.strikePrice-b.strikePrice:a.expirationDate.localeCompare(b.expirationDate);
     });
-    if(!state.ideasChain.length){ state.ideasChainError='No ODAX put contracts returned by Eurex API.'; render(); return; }
+    if(!state.ideasChain.length){ state.ideasChainError='No ODAX contracts returned by Eurex API.'; render(); return; }
     render();
     if(cb) cb();
   });
@@ -2416,6 +2443,63 @@ function generateTradeIdeas(){
   loadIdeasChain(function(){ computeTradeIdeas(spot,iv); });
 }
 
+// Builds one idea for a given strategy+risk profile, or returns null if no valid
+// spread can be constructed (insufficient strikes, negative flow, exceeds budget).
+function buildIdea(spec,profile,spot,sigma,r,today,expiries){
+  var targetDateStr=new Date(today.getTime()+profile.targetDTE*86400000).toISOString().split('T')[0];
+  var expiry=expiries.reduce(function(best,d){
+    if(best==null) return d;
+    return Math.abs(new Date(d)-new Date(targetDateStr))<Math.abs(new Date(best)-new Date(targetDateStr))?d:best;
+  },null);
+  if(!expiry) return null;
+  var contractsAtExpiry=state.ideasChain.filter(function(c){return c.expirationDate===expiry&&c.callPutFlag===spec.optType;});
+  var strikesAtExpiry=contractsAtExpiry.map(function(c){return c.strikePrice;}).sort(function(a,b){return a-b;});
+  if(strikesAtExpiry.length<2) return null;
+  var T=Math.max((new Date(expiry)-today)/86400000,1)/365;
+  var targetNear=spot*(1+spec.dirSign*profile.kSigma*sigma*Math.sqrt(T));
+  var nearStrike=strikesAtExpiry.reduce(function(best,s){return Math.abs(s-targetNear)<Math.abs(best-targetNear)?s:best;},strikesAtExpiry[0]);
+  var farCandidates=spec.dirSign<0?strikesAtExpiry.filter(function(s){return s<nearStrike;}):strikesAtExpiry.filter(function(s){return s>nearStrike;});
+  if(!farCandidates.length) return null;
+  var targetFar=nearStrike+spec.dirSign*profile.widthPts;
+  var farStrike=farCandidates.reduce(function(best,s){return Math.abs(s-targetFar)<Math.abs(best-targetFar)?s:best;},farCandidates[0]);
+  var nearContract=contractsAtExpiry.filter(function(c){return c.strikePrice===nearStrike;})[0];
+  var farContract=contractsAtExpiry.filter(function(c){return c.strikePrice===farStrike;})[0];
+  var nearIsLive=!!(nearContract&&nearContract.settlementPrice!=null&&nearContract.settlementPrice>0);
+  var farIsLive=!!(farContract&&farContract.settlementPrice!=null&&farContract.settlementPrice>0);
+  var priceFn=spec.optType==='P'?bsPut:bsCall;
+  var nearPrem=nearIsLive?nearContract.settlementPrice:priceFn(spot,nearStrike,T,r,sigma);
+  var farPrem=farIsLive?farContract.settlementPrice:priceFn(spot,farStrike,T,r,sigma);
+  var netFlow=nearPrem-farPrem; // near leg (closer to spot) is worth more by construction
+  if(netFlow<=0) return null;
+  var widthPts=Math.abs(farStrike-nearStrike);
+  var maxRiskEURPerContract,maxProfitEURPerContract;
+  if(spec.isCredit){
+    maxRiskEURPerContract=(widthPts-netFlow)*MULTIPLIER;
+    maxProfitEURPerContract=netFlow*MULTIPLIER;
+  }else{
+    maxRiskEURPerContract=netFlow*MULTIPLIER;
+    maxProfitEURPerContract=(widthPts-netFlow)*MULTIPLIER;
+  }
+  if(maxRiskEURPerContract<=0||maxProfitEURPerContract<0) return null;
+  if(maxRiskEURPerContract>state.ideasMaxRisk) return null; // even 1 contract would exceed the risk budget
+  var contracts=Math.max(1,Math.floor(state.ideasMaxRisk/maxRiskEURPerContract));
+  var breakeven=spec.optType==='P'?(nearStrike-netFlow):(nearStrike+netFlow);
+  var d2be=(Math.log(spot/breakeven)+(r-sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
+  var maxRiskTotal=maxRiskEURPerContract*contracts;
+  var maxProfitTotal=maxProfitEURPerContract*contracts;
+  return{
+    strategy:spec.key, strategyLabel:spec.label, optType:spec.optType, isCredit:spec.isCredit,
+    profile:profile.name, expiry:expiry, dte:Math.round((new Date(expiry)-today)/86400000),
+    nearStrike:nearStrike, farStrike:farStrike, nearAction:spec.isCredit?'SELL':'BUY', farAction:spec.isCredit?'BUY':'SELL',
+    nearPrem:nearPrem, farPrem:farPrem, widthPts:widthPts, contracts:contracts,
+    pricingSource:(nearIsLive&&farIsLive)?'live':(nearIsLive||farIsLive)?'mixed':'estimate',
+    netFlowTotal:netFlow*MULTIPLIER*contracts,
+    maxRiskTotal:maxRiskTotal, maxProfitTotal:maxProfitTotal,
+    breakeven:breakeven, roi:maxRiskTotal>0?(maxProfitTotal/maxRiskTotal*100):0,
+    popApprox:spec.profitAbove?normCdf(d2be)*100:normCdf(-d2be)*100
+  };
+}
+
 function computeTradeIdeas(spot,ivPts){
   var sigma=ivPts/100;
   var r=IDEAS_RISK_FREE_RATE;
@@ -2424,48 +2508,10 @@ function computeTradeIdeas(spot,ivPts){
   state.ideasChain.forEach(function(c){ if(!seen[c.expirationDate]){seen[c.expirationDate]=1;expiries.push(c.expirationDate);} });
   expiries.sort();
   var results=[];
-  IDEA_PROFILES.forEach(function(profile){
-    var targetDateStr=new Date(today.getTime()+profile.targetDTE*86400000).toISOString().split('T')[0];
-    var expiry=expiries.reduce(function(best,d){
-      if(best==null) return d;
-      return Math.abs(new Date(d)-new Date(targetDateStr))<Math.abs(new Date(best)-new Date(targetDateStr))?d:best;
-    },null);
-    if(!expiry) return;
-    var contractsAtExpiry=state.ideasChain.filter(function(c){return c.expirationDate===expiry;});
-    var strikesAtExpiry=contractsAtExpiry.map(function(c){return c.strikePrice;}).sort(function(a,b){return a-b;});
-    if(strikesAtExpiry.length<2) return;
-    var T=Math.max((new Date(expiry)-today)/86400000,1)/365;
-    var targetShort=spot*(1-profile.kSigma*sigma*Math.sqrt(T));
-    var shortStrike=strikesAtExpiry.reduce(function(best,s){return Math.abs(s-targetShort)<Math.abs(best-targetShort)?s:best;},strikesAtExpiry[0]);
-    var lowerStrikes=strikesAtExpiry.filter(function(s){return s<shortStrike;});
-    if(!lowerStrikes.length) return;
-    var targetLong=shortStrike-profile.widthPts;
-    var longStrike=lowerStrikes.reduce(function(best,s){return Math.abs(s-targetLong)<Math.abs(best-targetLong)?s:best;},lowerStrikes[0]);
-    var shortContract=contractsAtExpiry.filter(function(c){return c.strikePrice===shortStrike;})[0];
-    var longContract=contractsAtExpiry.filter(function(c){return c.strikePrice===longStrike;})[0];
-    var shortIsLive=!!(shortContract&&shortContract.settlementPrice!=null&&shortContract.settlementPrice>0);
-    var longIsLive=!!(longContract&&longContract.settlementPrice!=null&&longContract.settlementPrice>0);
-    var shortPrem=shortIsLive?shortContract.settlementPrice:bsPut(spot,shortStrike,T,r,sigma);
-    var longPrem=longIsLive?longContract.settlementPrice:bsPut(spot,longStrike,T,r,sigma);
-    var creditPts=shortPrem-longPrem;
-    if(creditPts<=0) return;
-    var widthPts=shortStrike-longStrike;
-    var maxRiskEURPerContract=(widthPts-creditPts)*MULTIPLIER;
-    if(maxRiskEURPerContract<=0) return;
-    if(maxRiskEURPerContract>state.ideasMaxRisk) return; // even 1 contract would exceed the risk budget
-    var contracts=Math.max(1,Math.floor(state.ideasMaxRisk/maxRiskEURPerContract));
-    var d2=(Math.log(spot/shortStrike)+(r-sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
-    results.push({
-      profile:profile.name, expiry:expiry, dte:Math.round((new Date(expiry)-today)/86400000),
-      shortStrike:shortStrike, longStrike:longStrike, widthPts:widthPts, contracts:contracts,
-      shortPrem:shortPrem, longPrem:longPrem, creditPts:creditPts,
-      pricingSource:(shortIsLive&&longIsLive)?'live':(shortIsLive||longIsLive)?'mixed':'estimate',
-      creditTotal:creditPts*MULTIPLIER*contracts,
-      maxRiskTotal:maxRiskEURPerContract*contracts,
-      maxProfitTotal:creditPts*MULTIPLIER*contracts,
-      breakeven:shortStrike-creditPts,
-      roi:(maxRiskEURPerContract*contracts)>0?(creditPts*MULTIPLIER*contracts)/(maxRiskEURPerContract*contracts)*100:0,
-      popApprox:normCdf(d2)*100
+  STRATEGY_SPECS.forEach(function(spec){
+    IDEA_PROFILES.forEach(function(profile){
+      var idea=buildIdea(spec,profile,spot,sigma,r,today,expiries);
+      if(idea) results.push(idea);
     });
   });
   state.ideasResults=results;
