@@ -180,7 +180,7 @@ var state = {
   ideasSpotError: null,
   ideasSpotSource: null,
   ideasIvOverride: null,
-  ideasTargetDelta: null,
+  ideasTargetMovePct: null,
   ideasChain: [],
   ideasChainLoading: false,
   ideasChainError: null,
@@ -1275,8 +1275,8 @@ function renderIdeas(){
         '<input id="ideas-risk-inp" type="text" inputmode="decimal" value="'+fmt(state.ideasMaxRisk,0)+'"/>'+
       '</div>'+
       '<div class="form-field">'+
-        '<span class="form-label">TARGET DELTA % (optional)</span>'+
-        '<input id="ideas-delta-inp" type="text" inputmode="decimal" placeholder="e.g. 15 — blank = auto" value="'+(state.ideasTargetDelta!=null?fmt(state.ideasTargetDelta,0):'')+'"/>'+
+        '<span class="form-label">EXPECTED MOVE % (optional)</span>'+
+        '<input id="ideas-move-inp" type="text" inputmode="decimal" placeholder="e.g. 5 — blank = auto" value="'+(state.ideasTargetMovePct!=null?fmt(state.ideasTargetMovePct,0):'')+'"/>'+
       '</div>'+
     '</div>'+
     (state.ideasSpotError?'<div style="color:var(--red);font-size:11px;margin-bottom:10px">'+esc(state.ideasSpotError)+'</div>':'')+
@@ -1300,7 +1300,7 @@ function renderIdeas(){
   }
 
   return '<div class="section-title">Trade Ideas</div>'+
-    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread, bear put spread, and bull call spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data. By default the near strike is picked from a vol-scaled OTM cushion per risk profile; set TARGET DELTA % to instead pick the near strike by delta (using Eurex\'s live OptionsDelta when available, else Black-Scholes) for all three profiles. Premiums use Eurex\'s previous-day official settlement price when available (badged EUREX SETTLEMENT), and fall back to a <b>Black-Scholes estimate</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) otherwise. Settlement prices are still end-of-prior-day, not live intraday quotes &mdash; always verify the actual premium in DEGIRO before entering.</div>'+
+    '<div style="color:var(--muted);font-size:11px;margin-bottom:16px">Bull put spread, bear put spread, and bull call spread candidates on ODAX &middot; strikes/expiries from live Eurex reference data. By default the short strike is picked from a vol-scaled OTM cushion per risk profile; set EXPECTED MOVE % to instead place the short strike (the max-profit crossing point) exactly that % away from spot for all three profiles. Each leg\'s actual option delta (Eurex live where available, else Black-Scholes) is shown for reference alongside it. Premiums use Eurex\'s previous-day official settlement price when available (badged EUREX SETTLEMENT), and fall back to a <b>Black-Scholes estimate</b> (flat VDAX-NEW vol, r=2.5%, no bid/ask or fees) otherwise. Settlement prices are still end-of-prior-day, not live intraday quotes &mdash; always verify the actual premium in DEGIRO before entering.</div>'+
     '<div class="card">'+spotRow+'</div>'+
     resultsHtml;
 }
@@ -1995,10 +1995,10 @@ function bindEvents(){
     if(!isNaN(val)&&val>0) state.ideasMaxRisk=val;
     render();
   });
-  var ideasDeltaInp=document.getElementById('ideas-delta-inp');
-  if(ideasDeltaInp) ideasDeltaInp.addEventListener('change',function(){
+  var ideasMoveInp=document.getElementById('ideas-move-inp');
+  if(ideasMoveInp) ideasMoveInp.addEventListener('change',function(){
     var val=parseFloat(this.value.replace(',','.'));
-    state.ideasTargetDelta=(isNaN(val)||val<=0||val>=100)?null:val;
+    state.ideasTargetMovePct=(isNaN(val)||val<=0||val>=100)?null:val;
     render();
   });
   var btnIdeasGen=document.getElementById('btn-ideas-generate');
@@ -2193,8 +2193,9 @@ function bsCall(S,K,T,r,sigma){
   if(T<=0) return Math.max(S-K,0);
   return bsPut(S,K,T,r,sigma)+S-K*Math.exp(-r*T);
 }
-// Delta magnitude (0..1) used for target-delta strike selection. Call delta is
-// N(d1); put delta is N(d1)-1, but callers only ever compare magnitudes.
+// Delta magnitude (0..1), shown per leg for reference only (strike selection is
+// driven by expected % move, not delta). Call delta is N(d1); put delta is
+// N(d1)-1, but callers only ever compare magnitudes.
 function bsDeltaAbs(S,K,T,r,sigma,optType){
   if(T<=0) return optType==='C'?(S>K?1:0):(S<K?1:0);
   if(sigma<=0) sigma=0.0001;
@@ -2326,12 +2327,12 @@ function generateTradeIdeas(){
   var iv=state.ideasIvOverride!=null?state.ideasIvOverride:(state.vdaxMeta?state.vdaxMeta.latest:null);
   if(!spot){ state.ideasGenError='Enter or fetch the current DAX spot level first.'; render(); return; }
   if(!iv){ state.ideasGenError='No VDAX-NEW level available — enter an implied vol % manually.'; render(); return; }
-  loadIdeasChain(function(){ computeTradeIdeas(spot,iv,state.ideasTargetDelta); });
+  loadIdeasChain(function(){ computeTradeIdeas(spot,iv,state.ideasTargetMovePct); });
 }
 
 // Builds one idea for a given strategy+risk profile, or returns null if no valid
 // spread can be constructed (insufficient strikes, negative flow, exceeds budget).
-function buildIdea(spec,profile,spot,sigma,r,today,expiries,targetDeltaPct){
+function buildIdea(spec,profile,spot,sigma,r,today,expiries,targetMovePct){
   var targetDateStr=new Date(today.getTime()+profile.targetDTE*86400000).toISOString().split('T')[0];
   var expiry=expiries.reduce(function(best,d){
     if(best==null) return d;
@@ -2346,22 +2347,30 @@ function buildIdea(spec,profile,spot,sigma,r,today,expiries,targetDeltaPct){
     var c=contractsAtExpiry.filter(function(cc){return cc.strikePrice===strike;})[0];
     return (c&&c.delta!=null)?Math.abs(c.delta):bsDeltaAbs(spot,strike,T,r,sigma,spec.optType);
   }
-  var nearStrike;
-  if(targetDeltaPct!=null){
-    // Target-delta selection: pick the strike whose (real Eurex delta if present,
-    // else Black-Scholes delta) magnitude is closest to the requested target.
-    var targetFrac=targetDeltaPct/100;
-    nearStrike=strikesAtExpiry.reduce(function(best,s){
-      return Math.abs(deltaAt(s)-targetFrac)<Math.abs(deltaAt(best)-targetFrac)?s:best;
-    },strikesAtExpiry[0]);
+  var nearStrike,farStrike;
+  if(targetMovePct!=null){
+    // Target move %: position the SHORT strike (whichever leg is sold) at the
+    // expected spot move -- that's the crossing point where the spread's max
+    // profit is achieved, not an option Greek. The other (bought) leg sits
+    // `width` further from spot for a credit spread (protection), or `width`
+    // closer to spot for a debit spread (the leg actually paid for).
+    var shortTarget=spot*(1+spec.dirSign*targetMovePct/100);
+    var shortStrike=strikesAtExpiry.reduce(function(best,s){return Math.abs(s-shortTarget)<Math.abs(best-shortTarget)?s:best;},strikesAtExpiry[0]);
+    var longDir=spec.isCredit?spec.dirSign:-spec.dirSign;
+    var longCandidates=longDir<0?strikesAtExpiry.filter(function(s){return s<shortStrike;}):strikesAtExpiry.filter(function(s){return s>shortStrike;});
+    if(!longCandidates.length) return null;
+    var longTarget=shortStrike+longDir*profile.widthPts;
+    var longStrike=longCandidates.reduce(function(best,s){return Math.abs(s-longTarget)<Math.abs(best-longTarget)?s:best;},longCandidates[0]);
+    if(spec.isCredit){ nearStrike=shortStrike; farStrike=longStrike; }
+    else { nearStrike=longStrike; farStrike=shortStrike; }
   }else{
     var targetNear=spot*(1+spec.dirSign*profile.kSigma*sigma*Math.sqrt(T));
     nearStrike=strikesAtExpiry.reduce(function(best,s){return Math.abs(s-targetNear)<Math.abs(best-targetNear)?s:best;},strikesAtExpiry[0]);
+    var farCandidates=spec.dirSign<0?strikesAtExpiry.filter(function(s){return s<nearStrike;}):strikesAtExpiry.filter(function(s){return s>nearStrike;});
+    if(!farCandidates.length) return null;
+    var targetFar=nearStrike+spec.dirSign*profile.widthPts;
+    farStrike=farCandidates.reduce(function(best,s){return Math.abs(s-targetFar)<Math.abs(best-targetFar)?s:best;},farCandidates[0]);
   }
-  var farCandidates=spec.dirSign<0?strikesAtExpiry.filter(function(s){return s<nearStrike;}):strikesAtExpiry.filter(function(s){return s>nearStrike;});
-  if(!farCandidates.length) return null;
-  var targetFar=nearStrike+spec.dirSign*profile.widthPts;
-  var farStrike=farCandidates.reduce(function(best,s){return Math.abs(s-targetFar)<Math.abs(best-targetFar)?s:best;},farCandidates[0]);
   var nearContract=contractsAtExpiry.filter(function(c){return c.strikePrice===nearStrike;})[0];
   var farContract=contractsAtExpiry.filter(function(c){return c.strikePrice===farStrike;})[0];
   var nearIsLive=!!(nearContract&&nearContract.settlementPrice!=null&&nearContract.settlementPrice>0);
@@ -2401,7 +2410,7 @@ function buildIdea(spec,profile,spot,sigma,r,today,expiries,targetDeltaPct){
   };
 }
 
-function computeTradeIdeas(spot,ivPts,targetDeltaPct){
+function computeTradeIdeas(spot,ivPts,targetMovePct){
   var sigma=ivPts/100;
   var r=IDEAS_RISK_FREE_RATE;
   var today=new Date();
@@ -2411,7 +2420,7 @@ function computeTradeIdeas(spot,ivPts,targetDeltaPct){
   var results=[];
   STRATEGY_SPECS.forEach(function(spec){
     IDEA_PROFILES.forEach(function(profile){
-      var idea=buildIdea(spec,profile,spot,sigma,r,today,expiries,targetDeltaPct);
+      var idea=buildIdea(spec,profile,spot,sigma,r,today,expiries,targetMovePct);
       if(idea) results.push(idea);
     });
   });

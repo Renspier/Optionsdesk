@@ -54,12 +54,17 @@ in chat), the method is the same:
    realistic across different vol/DTE combos instead of producing
    near-worthless or absurdly risky spreads. See `STRATEGY_SPECS` and
    `IDEA_PROFILES` in `index.html` for the current parameters.
-   If a **target delta %** is given (optional input, e.g. "15" for a 15-delta
-   strike), the near strike is instead picked by matching that delta —
-   preferring each contract's real Eurex `OptionsDelta` when present, else a
-   Black-Scholes delta (`bsDeltaAbs()`) — applied uniformly across all three
-   profiles for that generation (they still differ by DTE/width, so the
-   resulting strikes still differ per profile even at the same target delta).
+   If an **expected move %** is given (optional input, e.g. "5"), the SHORT
+   strike (whichever leg is sold — the crossing point where the spread's max
+   profit is achieved, not an option Greek) is instead placed exactly that %
+   away from spot: `shortStrike = spot * (1 + dirSign * movePct/100)`, with
+   the other (bought) leg `width` further out for a credit spread or `width`
+   closer to spot for a debit spread — applied uniformly across all three
+   profiles for that generation (they still differ by DTE/width, so absolute
+   strikes still differ per profile even at the same expected move %). Each
+   leg's actual option delta (Eurex live `OptionsDelta` when present, else
+   Black-Scholes `bsDeltaAbs()`) is shown alongside it for reference only —
+   it does not drive selection.
    Bear Put Spread reuses the *exact same two strikes* as Bull Put Spread —
    it's the mirror position (buy/sell legs swapped) on the same put pair, not
    a separately-selected spread. Bull Call Spread needs the call side of the
