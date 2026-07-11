@@ -38,30 +38,45 @@ no build step — plain JS, runs by opening the file in a browser.
   **not implemented** — out of scope for a remote sandbox with no access to
   the user's local network.
 
-## "Give me 3 trade options" workflow
+## "Give me trade options" workflow
 
 Whenever asked for trade ideas (in the app's IDEAS tab, or conversationally
 in chat), the method is the same:
 
 1. Inputs needed: current DAX spot, current VDAX-NEW level (or override IV%),
    and a max-risk-per-trade budget in EUR.
-2. Generate 3 bull put spread candidates that vary by **DTE and width** (not
-   a fixed OTM%), using a vol-scaled strike offset:
-   `shortStrike ≈ spot * (1 - kSigma * IV * sqrt(T))` — this keeps strikes
+2. Generate candidates for **three strategies** — Bull Put Spread (credit),
+   Bear Put Spread (debit), Bull Call Spread (debit) — each with 3 profiles
+   (Conservative/Balanced/Aggressive) that vary by **DTE and width** (not a
+   fixed OTM%), using a vol-scaled strike offset from spot:
+   `nearStrike ≈ spot * (1 + dirSign * kSigma * IV * sqrt(T))` (dirSign is -1
+   for puts/below spot, +1 for calls/above spot) — this keeps strikes
    realistic across different vol/DTE combos instead of producing
-   near-worthless or absurdly risky spreads. See `IDEA_PROFILES` in
-   `index.html` for the current Conservative/Balanced/Aggressive parameters.
+   near-worthless or absurdly risky spreads. See `STRATEGY_SPECS` and
+   `IDEA_PROFILES` in `index.html` for the current parameters.
+   Bear Put Spread reuses the *exact same two strikes* as Bull Put Spread —
+   it's the mirror position (buy/sell legs swapped) on the same put pair, not
+   a separately-selected spread. Bull Call Spread needs the call side of the
+   chain and strikes above spot; call premiums are estimated via put-call
+   parity (`bsCall()`) when no live settlement price is available.
 3. Snap to real strikes/expiries from the Eurex chain (not arbitrary levels).
 4. Size contracts so max risk stays within the stated budget (never round up
    past it — see the `maxRiskEURPerContract > state.ideasMaxRisk` guard).
-5. Report for each idea: strikes, width, contracts, **net credit received**,
-   max risk, max profit, breakeven, approx POP, ROI on risk, and portfolio
-   impact (open credit / portfolio risk / best-case open P&L, before → after
-   if the trade were added).
+   For debit spreads the debit paid **is** the max risk (no further subtraction
+   from width); for the credit spread max risk is `width - credit`.
+5. Report for each idea: strikes, width, contracts, **net credit received**
+   (credit spread) or **net debit paid** (debit spreads), max risk, max
+   profit, breakeven, approx POP (relative to breakeven, not the short
+   strike), ROI on risk, and portfolio impact (open credit / portfolio risk
+   / best-case open P&L, before → after if the trade were added — debit
+   spreads reduce the "open credit" figure rather than adding to it).
 6. Always caveat: premiums are prior-day Eurex settlement prices where
    available, else Black-Scholes estimates — neither is a live DEGIRO
-   quote. Confirm actual fill price before trading.
+   quote. Confirm actual fill price before trading. Deep-OTM debit spreads
+   can show very high ROI% (small debit, big theoretical payoff) alongside a
+   correspondingly low approx POP — that's expected, not a bug.
 
 When doing this conversationally (screenshot input instead of the app), ask
 for current DAX level + relevant ODAX premiums if not provided, and present
-the same fields for each of the 3 ideas.
+the same fields for each idea across all three strategies (unless the user
+asks for one strategy specifically).
